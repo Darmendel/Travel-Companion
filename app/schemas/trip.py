@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List
 from datetime import date
 
@@ -22,6 +22,6 @@ class Trip(TripCreate):
     destinations: List[str]
 
     class Config:
-        orm_mode = True  # Enables compatibility with ORM objects (e.g., SQLAlchemy) -
+        model_config = ConfigDict(from_attributes=True)  # Enables compatibility with ORM objects (e.g., SQLAlchemy) -
         # This tells FastAPI it can read data from SQLAlchemy models (like .id, .name, etc.)
         # and convert them to Pydantic JSON.
