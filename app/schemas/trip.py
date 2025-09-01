@@ -1,6 +1,13 @@
-from pydantic import BaseModel, ConfigDict, field_validator, Field, constr
-from typing import List
-from datetime import date, datetime
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import List, Optional
+from datetime import date
+
+from app.validators.trip_validators import (
+    validate_title,
+    validate_start_date,
+    validate_end_date,
+    validate_destinations
+)
 
 
 # This model defines the structure expected in POST requests
@@ -14,39 +21,52 @@ class TripCreate(BaseModel):
 
     @field_validator('title')
     @classmethod
-    def title_must_not_be_empty(cls, title):
-        if not title.strip():
-            raise ValueError("title must not be empty")
-        return title
+    def validate_title(cls, title):
+        return validate_title(title)
 
     @field_validator('start_date')
     @classmethod
-    def start_date_must_not_be_in_past(cls, start_date_value):
-        today = datetime.today().date()
-        if start_date_value < today:
-            raise ValueError(f"start_date {start_date_value} cannot be in the past (today is {today})")
-        return start_date_value
+    def validate_start_date(cls, start_date_value):
+        return validate_start_date(start_date_value)
 
     @field_validator('end_date')
     @classmethod
-    def end_date_must_be_after_start_date(cls, end_date_value, info):
+    def validate_end_date(cls, end_date_value, info):
         start_date_value = info.data.get('start_date')
-        if start_date_value and end_date_value < start_date_value:
-            raise ValueError("end_date must be after or equal to start_date")
-        return end_date_value
+        return validate_end_date(end_date_value, start_date_value)
 
     @field_validator('destinations')
     @classmethod
-    def destinations_must_be_unique(cls, destinations_list):
-        # limit to 100 destinations
-        # Enforce a Reasonable Max Length. This prevents malicious or bloated input like ["Paris"] * 1000000
-        if len(destinations_list) > 100:
-            raise ValueError("Too many destinations (limit is 100)")
+    def validate_destinations(cls, destinations_list):
+        return validate_destinations(destinations_list)
 
-        cleaned = [d.strip().lower() for d in destinations_list]
-        if len(cleaned) != len(set(cleaned)):
-            raise ValueError("destinations must not contain duplicates (case-insensitive)")
-        return cleaned
+
+class TripUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1)
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    destinations: Optional[List[str]] = None  # Optional[List[constr(min_length=1, max_length=50)]] = Field(None, max_length=100)
+
+    @field_validator('title')
+    @classmethod
+    def validate_title(cls, title):
+        return validate_title(title) if title else None
+
+    @field_validator('start_date')
+    @classmethod
+    def validate_start_date(cls, start_date_value):
+        return validate_start_date(start_date_value) if start_date_value else None
+
+    @field_validator('end_date')
+    @classmethod
+    def validate_end_date(cls, end_date_value, info):
+        start_date_value = info.data.get('start_date')
+        return validate_end_date(end_date_value, start_date_value) if end_date_value else None
+
+    @field_validator('destinations')
+    @classmethod
+    def validate_destinations(cls, destinations_list):
+        return validate_destinations(destinations_list) if destinations_list else None
 
 
 # Defines how a trip is returned in responses.

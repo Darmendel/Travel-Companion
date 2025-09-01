@@ -7,15 +7,15 @@ client = TestClient(app)
 
 def test_create_trip_success():
     response = client.post("/trips/", json={
-        "title": "Test Trip",
+        "title": "Second Test Trip",
         "start_date": "2025-11-01",
         "end_date": "2025-11-10",
         "destinations": ["Paris", "London", "Tokyo"]
     })
     assert response.status_code == 200
     data = response.json()
-    assert data["title"] == "Test Trip"
-    assert data["id"] == 1  # Assuming it's the first trip
+    assert data["title"] == "Second Test Trip"
+    assert data["id"] == 2
 
 
 def test_create_trip_missing_fields():
@@ -165,6 +165,44 @@ def test_get_trip_by_id_not_found():
     assert response.json()["detail"] == "Trip with ID 999 not found"
 
 
+def test_update_trip_success():
+    response = client.put("/trips/1", json={
+        "title": "Updated Trip",
+        "destinations": ["Tokyo", "Hoi An"]
+    })
+    assert response.status_code == 200
+    data = response.json()
+    expected = [x.lower() for x in ["Tokyo", "Hoi An"]]
+    assert data["title"] == "Updated Trip"
+    assert data["destinations"] == expected
+
+
+def test_update_trip_title_success():
+    response = client.put("/trips/1", json={
+        "title": "Short Trip"
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == "Short Trip"
+
+
+def test_update_trip_not_found():
+    response = client.put("/trips/999", json={
+        "title": "Ghost Trip"
+    })
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Trip with ID 999 not found"
+
+
+def test_update_trip_invalid_dates():
+    response = client.put("/trips/1", json={
+        "start_date": "2025-11-10",
+        "end_date": "2025-11-01"
+    })
+    assert response.status_code == 422
+    assert "end_date must be after or equal to start_date" in response.text
+
+
 def test_delete_trip_success():
     response = client.delete("/trips/1")
     assert response.status_code == 200
@@ -176,7 +214,7 @@ def test_delete_trip_success():
 def test_delete_trip_not_found():
     response = client.delete("/trips/999")
     assert response.status_code == 404
-    assert response.json()["detail"] == "Trip not found"
+    assert response.json()["detail"] == "Trip with ID 999 not found"
 
 
 # Test: PYTHONPATH=. pytest
