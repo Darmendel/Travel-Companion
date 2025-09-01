@@ -10,8 +10,7 @@ class TripCreate(BaseModel):
     # description: str | None = None
     start_date: date
     end_date: date
-    destinations: List[constr(min_length=1, max_length=50)] = Field(..., max_items=100)  # limit to 100 destinations
-    # (Enforce a Reasonable Max Length. This prevents malicious or bloated input like ["Paris"] * 1000000)
+    destinations: List[str]  # destinations: List[constr(min_length=1, max_length=50)] = Field(..., max_items=100)
 
     @field_validator('title')
     @classmethod
@@ -39,6 +38,11 @@ class TripCreate(BaseModel):
     @field_validator('destinations')
     @classmethod
     def destinations_must_be_unique(cls, destinations_list):
+        # limit to 100 destinations
+        # Enforce a Reasonable Max Length. This prevents malicious or bloated input like ["Paris"] * 1000000
+        if len(destinations_list) > 100:
+            raise ValueError("Too many destinations (limit is 100)")
+
         cleaned = [d.strip().lower() for d in destinations_list]
         if len(cleaned) != len(set(cleaned)):
             raise ValueError("destinations must not contain duplicates (case-insensitive)")
