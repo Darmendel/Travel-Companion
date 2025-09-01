@@ -129,18 +129,18 @@ def test_create_trip_over_limit_destinations():
         "destinations": list(map(lambda i: f"City{i}", range(1, 151)))  # ["City1", "City2", "City3", ..., "City150"]
     })
     assert response.status_code == 422
-    # assert "destinations must not contain duplicates" in response.text
+    assert "Too many destinations (limit is 100)" in response.text
 
 
-# def test_create_trip_over_limit_duplicate_destinations():
-#     response = client.post("/trips/", json={
-#         "title": "Broken Trip",
-#         "start_date": "2025-11-01",
-#         "end_date": "2025-11-10",
-#         "destinations": list(map(lambda i: "City", range(1, 151)))  # ["City", "City", ..., "City"] (150 duplicates)
-#     })
-#     assert response.status_code == 422
-#     assert "destinations must not contain duplicates" in response.text
+def test_create_trip_over_limit_duplicate_destinations():
+    response = client.post("/trips/", json={
+        "title": "Broken Trip",
+        "start_date": "2025-11-01",
+        "end_date": "2025-11-10",
+        "destinations": list(map(lambda i: "City", range(1, 151)))  # ["City", "City", ..., "City"] (150 duplicates)
+    })
+    assert response.status_code == 422
+    assert "Too many destinations (limit is 100)" in response.text
 
 
 def test_get_all_trips():
