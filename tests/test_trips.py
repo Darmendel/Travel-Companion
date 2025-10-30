@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 from datetime import datetime, timedelta
 from app.main import app
@@ -5,6 +6,7 @@ from app.main import app
 client = TestClient(app)
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_create_trip_success():
     response = client.post("/trips/", json={
         "title": "Second Test Trip",
@@ -15,9 +17,10 @@ def test_create_trip_success():
     assert response.status_code == 200
     data = response.json()
     assert data["title"] == "Second Test Trip"
-    assert data["id"] == 2
+    assert data["id"] == 2  # Because reset_fake_db adds id=1 first
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_create_trip_missing_fields():
     response = client.post("/trips/", json={
         "title": "Incomplete Trip"
@@ -26,6 +29,7 @@ def test_create_trip_missing_fields():
     assert response.status_code == 422  # Unprocessable Entity
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_create_trip_missing_title():
     response = client.post("/trips/", json={
         "start_date": "2025-11-01",
@@ -35,6 +39,7 @@ def test_create_trip_missing_title():
     assert response.status_code == 422
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_create_trip_empty_title():
     response = client.post("/trips/", json={
         "title": "    ",
@@ -46,6 +51,7 @@ def test_create_trip_empty_title():
     assert "title must not be empty" in response.text
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_create_trip_invalid_start_date():
     today = datetime.today().date()
     past_date = (datetime.today() - timedelta(days=1)).date().isoformat()
@@ -61,6 +67,7 @@ def test_create_trip_invalid_start_date():
     assert f"start_date {past_date} cannot be in the past (today is {today})" in response.text
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_create_trip_invalid_end_date():
     response = client.post("/trips/", json={
         "title": "Broken Trip",
@@ -72,6 +79,7 @@ def test_create_trip_invalid_end_date():
     assert "end_date must be after or equal to start_date" in response.text
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_create_trip_with_100_destinations():
     destinations = [f"City{i}" for i in range(1, 101)]
     response = client.post("/trips/", json={
@@ -86,6 +94,7 @@ def test_create_trip_with_100_destinations():
     assert data["destinations"] == expected
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_create_trip_valid_mixed_case_destinations():
     response = client.post("/trips/", json={
         "title": "Trip",
@@ -99,6 +108,7 @@ def test_create_trip_valid_mixed_case_destinations():
     assert data["destinations"] == expected
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_create_trip_duplicate_destinations():
     response = client.post("/trips/", json={
         "title": "Broken Trip",
@@ -110,6 +120,7 @@ def test_create_trip_duplicate_destinations():
     assert "destinations must not contain duplicates (case-insensitive)" in response.text
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_create_trip_duplicate_destinations_case_insensitive():
     response = client.post("/trips/", json={
         "title": "Broken Trip",
@@ -121,6 +132,7 @@ def test_create_trip_duplicate_destinations_case_insensitive():
     assert "destinations must not contain duplicates (case-insensitive)" in response.text
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_create_trip_over_limit_destinations():
     response = client.post("/trips/", json={
         "title": "Broken Trip",
@@ -132,6 +144,7 @@ def test_create_trip_over_limit_destinations():
     assert "Too many destinations (limit is 100)" in response.text
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_create_trip_over_limit_duplicate_destinations():
     response = client.post("/trips/", json={
         "title": "Broken Trip",
@@ -143,6 +156,7 @@ def test_create_trip_over_limit_duplicate_destinations():
     assert "Too many destinations (limit is 100)" in response.text
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_get_all_trips():
     response = client.get("/trips/")
     assert response.status_code == 200
@@ -151,6 +165,7 @@ def test_get_all_trips():
     assert any(trip["title"] == "Test Trip" for trip in data)
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_get_trip_by_id_success():
     response = client.get("/trips/1")
     assert response.status_code == 200
@@ -159,12 +174,14 @@ def test_get_trip_by_id_success():
     assert data["title"] == "Test Trip"
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_get_trip_by_id_not_found():
     response = client.get("/trips/999")
     assert response.status_code == 404
     assert response.json()["detail"] == "Trip with ID 999 not found"
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_update_trip_success():
     response = client.put("/trips/1", json={
         "title": "Updated Trip",
@@ -177,6 +194,7 @@ def test_update_trip_success():
     assert data["destinations"] == expected
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_update_trip_title_success():
     response = client.put("/trips/1", json={
         "title": "Short Trip"
@@ -186,6 +204,7 @@ def test_update_trip_title_success():
     assert data["title"] == "Short Trip"
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_update_trip_not_found():
     response = client.put("/trips/999", json={
         "title": "Ghost Trip"
@@ -194,6 +213,7 @@ def test_update_trip_not_found():
     assert response.json()["detail"] == "Trip with ID 999 not found"
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_update_trip_invalid_dates():
     response = client.put("/trips/1", json={
         "start_date": "2025-11-10",
@@ -203,6 +223,7 @@ def test_update_trip_invalid_dates():
     assert "end_date must be after or equal to start_date" in response.text
 
 
+@pytest.mark.usefixtures("reset_fake_db")
 def test_delete_trip_success():
     response = client.delete("/trips/1")
     assert response.status_code == 200
@@ -217,7 +238,9 @@ def test_delete_trip_not_found():
     assert response.json()["detail"] == "Trip with ID 999 not found"
 
 
-# Test: PYTHONPATH=. pytest
+# Test:
+# 1. activate venv (once): source .venv/bin/activate
+# 2. PYTHONPATH=. pytest
 
 
 # git:
