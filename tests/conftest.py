@@ -18,4 +18,4 @@ def sample_trip():
 def reset_fake_db(sample_trip):
     FAKE_DB.clear()
     FAKE_DB.append(Trip(id=1, **sample_trip))
-    NEXT_ID["value"] = 2  # Reset NEXT_ID back to 1 (assuming the above trip has id=0)
+    NEXT_ID["value"] = 2  # Reset NEXT_ID back to 2 (assuming the above trip has id=1)
