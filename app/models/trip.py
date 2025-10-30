@@ -1,3 +1,4 @@
+# app/models/trip.py
 from sqlalchemy import Column, Integer, String, Date
 from sqlalchemy.orm import declarative_base
 from app.db.types import StringList
