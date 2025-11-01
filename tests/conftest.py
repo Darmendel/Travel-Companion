@@ -7,37 +7,39 @@ from app.db.session import get_db, Base
 from app.models.trip import Trip as TripModel
 
 # Create a temporary database (named test_db)
-SQLALCHEMY_TEST_URL = "postgresql+psycopg2://dar:cabbage27@localhost:5432/test_db"  # or: "sqlite:///./test.db" - SQLite for speed
-# SQLALCHEMY_TEST_URL = "sqlite:///./test.db"  # for SQLite
+TEST_DB_URL = "postgresql+psycopg2://dar:cabbage27@localhost:5432/test_db"
 
 # Create test engine and session
-# engine = create_engine(SQLALCHEMY_TEST_URL, connect_args={"check_same_thread": False})  # for sqlite (Allows this SQLite database connection to be shared across multiple threads - SQLite’s default behavior is single-threaded)
-engine = create_engine(SQLALCHEMY_TEST_URL)  # PostgreSQL
+engine = create_engine(TEST_DB_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_database():
     """Create all tables at the start of the test session, drop them at the end."""
-    print("\n🧱 Creating tables for test database...")
-    Base.metadata.drop_all(bind=engine)
+    Base.metadata.drop_all(bind=engine)  # metadata = global catalog of my ORM table definitions.
+
+    # Creates all tables defined on ORM models that inherit from Base, if they don't already exist.
     Base.metadata.create_all(bind=engine)
+    print("\nCreating tables for test database")
     yield
-    print("\n🧹 Dropping tables after tests...")
+
+    # Deletes all tables (*dangerous in production).
     Base.metadata.drop_all(bind=engine)
+    print("\nDropping tables after tests")
 
 
 @pytest.fixture()
 def db_session():
     """Creates a new database session for each test."""
-    connection = engine.connect()
-    transaction = connection.begin()
-    db = TestingSessionLocal(bind=connection)
+    connection = engine.connect()  # Manual connection to the database (rather than letting SQLAlchemy manage it automatically).
+    transaction = connection.begin()  # Starts a new transaction (all inserts/updates/deletes performed through this connection wil stay inside this transaction, if not committed yet).
+    db = TestingSessionLocal(bind=connection)  # Creates a new Session object (my ORM interface), that uses the same connection, the same transaction above.
 
     try:
-        yield db
-    finally:
-        db.close()
+        yield db  # Pauses the fixture and gives the test access to this db session.
+    finally:  # After a test is finished, the database is rolled back to a clean state.
+        db.close()  # Closes ORM session
         transaction.rollback()
         connection.close()
 
@@ -63,7 +65,7 @@ def client(db_session):
     app.dependency_overrides[get_db] = override_get_db
 
     # Returns a FastAPI test client that uses this override
-    with TestClient(app) as c:
+    with TestClient(app) as c:  # with TestClient(app) spins up a lightweight version of my FastAPI app (I can make real HTTP requests to it, like .get() and .post()), and when the test is over, the context manager automatically shuts it down (this is entirely in-memory).
         yield c
     
     # Clears overrides before next tests
@@ -83,6 +85,3 @@ def sample_trip(db_session):
     db_session.commit()
     db_session.refresh(trip)
     return trip
-
-
-# run in terminal: PYTHONPATH=. pytest -v

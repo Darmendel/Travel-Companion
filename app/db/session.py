@@ -10,6 +10,7 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)  # session factory
 
 # Base class for all ORM models (every model inherits from this)
+# Base is a special SQLAlchemy class factory that keeps track of all ORM models that inherit from it (Trip, User, etc)
 Base = declarative_base()
 
 # Dependency for FastAPI routes - creates a SQLAlchemy session (this session is passed into my route as the db argument).
@@ -30,9 +31,9 @@ def get_db():
 # run in terminal: python -m app.db.session
 # The -m flag tells Python to run a module (a .py file inside a package) as if it were a standalone script
 # (instead of typing: python path/to/your/file/app/db/session.py)
-if __name__ == "__main__":
-    with engine.connect() as conn:
-        print("✅ Connected to database!")
+# if __name__ == "__main__":
+#     with engine.connect() as conn:
+#         print("✅ Connected to database!")
 
 # In terminal:
 # Switch to the postgres user (PostgreSQL system account): sudo -i -u postgres

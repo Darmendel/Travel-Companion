@@ -1,5 +1,4 @@
 from sqlalchemy import Column, Integer, String, Date, ARRAY
-# from app.db.types import StringList
 from app.db.session import Base
 
 
@@ -11,8 +10,7 @@ class Trip(Base):
     title = Column(String, nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
-    destinations = Column(ARRAY(String), nullable=False)  # Storing as comma-separated string *for now*
-    # destinations = Column(StringList, nullable=False)
+    destinations = Column(ARRAY(String), nullable=False)
 
     def __repr__(self):
         return f"<TripModel(id={self.id}, title={self.title})>"
