@@ -23,7 +23,13 @@ def get_db():
         db.close()  # closes it automatically when done
 
 
+# Base.metadata.create_all(bind=engine)
+
+
 # Quick test for standalone execution
+# run in terminal: python -m app.db.session
+# The -m flag tells Python to run a module (a .py file inside a package) as if it were a standalone script
+# (instead of typing: python path/to/your/file/app/db/session.py)
 if __name__ == "__main__":
     with engine.connect() as conn:
         print("✅ Connected to database!")
