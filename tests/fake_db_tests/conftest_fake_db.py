@@ -4,6 +4,13 @@ from app.schemas.trip import Trip
 from datetime import date
 
 
+@pytest.fixture(autouse=True)
+def reset_fake_db(sample_trip):
+    FAKE_DB.clear()
+    FAKE_DB.append(Trip(id=1, **sample_trip))
+    NEXT_ID["value"] = 2  # Reset NEXT_ID back to 2 (assuming the above trip has id=1)
+
+
 @pytest.fixture()
 def sample_trip():
     return {
@@ -12,10 +19,3 @@ def sample_trip():
         "end_date": "2025-11-10",
         "destinations": ["Paris", "London", "Tokyo"]
     }
-
-
-@pytest.fixture(autouse=True)
-def reset_fake_db(sample_trip):
-    FAKE_DB.clear()
-    FAKE_DB.append(Trip(id=1, **sample_trip))
-    NEXT_ID["value"] = 2  # Reset NEXT_ID back to 2 (assuming the above trip has id=1)

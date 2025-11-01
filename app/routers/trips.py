@@ -36,6 +36,11 @@ def get_all_trips(db: Session = Depends(get_db)):
     return trips
 
 
+# input in POST/UPDATE: TripCreate / TripUpdate - (Pydantic input) for validation
+# output in POST/UPDDATE: TripModel - (SQLAlchemy) for DB operations
+# output in GET/DELETE: Trip - (Pydantic output) for responses
+
+
 # route: POST /trips - Create a new trip
 # Receives a JSON body (parsed automatically as a Python dict)
 # and echoes it back in the response
@@ -48,7 +53,9 @@ def create_trip(trip: TripCreate, db: Session = Depends(get_db)):
     # TripCreate is a Pydantic model, so trip.model_dump() gives a dict:
     # trip.model_dump() returns a dictionary (e.g., {"title": ..., "start_date": ..., ...}).
     # **trip.model_dump() unpacks that dictionary as keyword arguments.
-    new_trip = Trip(**trip.model_dump())
+    # output in POST/UPDDATE: TripModel - (SQLAlchemy) for DB operations:
+    # using TripModel(**trip.model_dump()) instead of Trip(**trip.model_dump()).
+    new_trip = TripModel(**trip.model_dump())
 
     db.add(new_trip)  # stage new trip for insertion
     db.commit()  # commit = save to db
