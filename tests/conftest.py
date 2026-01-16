@@ -78,8 +78,7 @@ def sample_trip(db_session):
     trip = TripModel(
         title="Test Trip",
         start_date="2025-11-01",
-        end_date="2025-11-10",
-        destinations=["Paris", "London", "Tokyo"]
+        end_date="2025-11-10"
     )
     db_session.add(trip)
     db_session.commit()

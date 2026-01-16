@@ -1,7 +1,6 @@
 import pytest
 from app.db.fake_db import FAKE_DB, NEXT_ID
 from app.schemas.trip import Trip
-from datetime import date
 
 
 @pytest.fixture(autouse=True)
@@ -17,5 +16,5 @@ def sample_trip():
         "title": "Test Trip",
         "start_date": "2025-11-01",
         "end_date": "2025-11-10",
-        "destinations": ["Paris", "London", "Tokyo"]
+        # "destinations": ["Paris", "London", "Tokyo"]
     }
