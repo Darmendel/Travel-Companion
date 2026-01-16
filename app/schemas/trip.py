@@ -5,8 +5,7 @@ from datetime import date
 from app.validators.trip_validators import (
     validate_title,
     validate_start_date,
-    validate_end_date,
-    validate_destinations
+    validate_end_date
 )
 
 
@@ -14,10 +13,8 @@ from app.validators.trip_validators import (
 # Validates input when creating a new trip.
 class TripCreate(BaseModel):
     title: str = Field(..., min_length=1)  # prevents empty title
-    # description: str | None = None
     start_date: date
     end_date: date
-    destinations: List[str]  # destinations: List[constr(min_length=1, max_length=50)] = Field(..., max_items=100)
 
     @field_validator('title')
     @classmethod
@@ -35,17 +32,11 @@ class TripCreate(BaseModel):
         start_date_value = info.data.get('start_date')
         return validate_end_date(end_date_value, start_date_value)
 
-    @field_validator('destinations')
-    @classmethod
-    def validate_destinations(cls, destinations_list):
-        return validate_destinations(destinations_list)
-
 
 class TripUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1)
     start_date: Optional[date] = None
     end_date: Optional[date] = None
-    destinations: Optional[List[str]] = None  # Optional[List[constr(min_length=1, max_length=50)]] = Field(None, max_length=100)
 
     @field_validator('title')
     @classmethod
@@ -63,11 +54,6 @@ class TripUpdate(BaseModel):
         start_date_value = info.data.get('start_date')
         return validate_end_date(end_date_value, start_date_value) if end_date_value else None
 
-    @field_validator('destinations')
-    @classmethod
-    def validate_destinations(cls, destinations_list):
-        return validate_destinations(destinations_list) if destinations_list else None
-
 
 # Defines how a trip is returned in responses.
 class Trip(TripCreate):
@@ -75,7 +61,6 @@ class Trip(TripCreate):
     title: str  # Name of the trip (required string)
     start_date: date
     end_date: date
-    destinations: List[str]
 
     class Config:
         model_config = ConfigDict(from_attributes=True)  # Enables compatibility with ORM objects (e.g., SQLAlchemy) -
