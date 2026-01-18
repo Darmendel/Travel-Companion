@@ -1,7 +1,17 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-DATABASE_URL = "postgresql+psycopg2://dar:cabbage27@localhost:5432/travel_app"
+# Read DATABASE_URL from the environment variables.
+# If DATABASE_URL is not set (e.g. when running locally without export),
+# fall back to a default local database URL.
+#
+# This allows the same codebase to work with different databases
+# (local / test / production) without changing the code.
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",  # os.getenv("DATABASE_URL") looks for an environment variable named DATABASE_URL
+    "postgresql+psycopg2://dar:cabbage27@localhost:5432/travel_app",  # if DATABASE_URL doesn't exist - uses this (default url in case DATABASE_URL is missing)
+)
 
 # Create the SQLAlchemy engine (handles DB connections)
 engine = create_engine(DATABASE_URL)

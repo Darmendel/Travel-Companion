@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, ARRAY
+from sqlalchemy import Column, Integer, String, Date
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 
@@ -11,7 +11,6 @@ class Trip(Base):
     title = Column(String, nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
-    # destinations = Column(ARRAY(String), nullable=False)
 
     stops = relationship(
         "Stop",
