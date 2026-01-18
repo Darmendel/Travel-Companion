@@ -1,13 +1,14 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 # client fixture comes from conftest.py automatically — no need to import
 def test_create_trip_success(client):
     response = client.post("/trips/", json={
         "title": "Second Test Trip",
-        "start_date": "2025-11-01",
-        "end_date": "2025-11-10"
+        "start_date": (date.today() + timedelta(days=10)).isoformat(),
+        "end_date": (date.today() + timedelta(days=20)).isoformat()
     })
+    print(response.status_code, response.json())
     assert response.status_code == 200
     data = response.json()
     assert data["title"] == "Second Test Trip"
@@ -23,8 +24,8 @@ def test_create_trip_missing_fields(client):
 
 def test_create_trip_missing_title(client):
     response = client.post("/trips/", json={
-        "start_date": "2025-11-01",
-        "end_date": "2025-11-10"
+        "start_date": (date.today() + timedelta(days=10)).isoformat(),
+        "end_date": (date.today() + timedelta(days=20)).isoformat()
     })
     assert response.status_code == 422
 
@@ -32,8 +33,8 @@ def test_create_trip_missing_title(client):
 def test_create_trip_empty_title(client):
     response = client.post("/trips/", json={
         "title": "    ",
-        "start_date": "2025-11-01",
-        "end_date": "2025-11-10"
+        "start_date": (date.today() + timedelta(days=10)).isoformat(),
+        "end_date": (date.today() + timedelta(days=20)).isoformat()
     })
     assert response.status_code == 422
     assert "title must not be empty" in response.text
@@ -56,8 +57,8 @@ def test_create_trip_invalid_start_date(client):
 def test_create_trip_invalid_end_date(client):
     response = client.post("/trips/", json={
         "title": "Broken Trip",
-        "start_date": "2025-11-10",
-        "end_date": "2025-11-01"
+        "start_date": (date.today() + timedelta(days=20)).isoformat(),
+        "end_date": (date.today() + timedelta(days=10)).isoformat()
     })
     assert response.status_code == 422
     assert "end_date must be after or equal to start_date" in response.text
@@ -187,8 +188,8 @@ def test_update_trip_not_found(client):
 
 def test_update_trip_invalid_dates(client):
     response = client.put("/trips/1", json={
-        "start_date": "2025-11-10",
-        "end_date": "2025-11-01"
+        "start_date": (date.today() + timedelta(days=20)).isoformat(),
+        "end_date": (date.today() + timedelta(days=10)).isoformat()
     })
     assert response.status_code == 422
     assert "end_date must be after or equal to start_date" in response.text

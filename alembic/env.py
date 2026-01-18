@@ -1,13 +1,11 @@
+import os
 from logging.config import fileConfig
-
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
-
 from sqlalchemy import create_engine
 from app.db.session import DATABASE_URL
 from app.db.session import Base
 from app.models import trip
-
 from alembic import context
 
 # this is the Alembic Config object, which provides
@@ -31,6 +29,8 @@ target_metadata = Base.metadata
 # ... etc.
 
 
+# Offline mode:
+# Doesn't connect to a DB! Just creates SQL: alembic upgrade head --sql
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
@@ -43,7 +43,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    url = os.environ["DATABASE_URL"]  # has to be defined -> if not, the program will crash (which is what we want).
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -55,6 +55,9 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+# Online mode:
+# When doing: alembic upgrade head ->
+# connects to a real DB and runs commands like: 'CREATE TABLE' and 'ALTER TABLE'.
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode.
 

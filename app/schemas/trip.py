@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from typing import List, Optional
+from typing import Optional
 from datetime import date
 
 from app.validators.trip_validators import (
