@@ -1,9 +1,10 @@
+# app/schemas/trip.py
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional
 from datetime import date
 
-from app.validators.trip_validators import (
-    validate_title,
+from app.validators.common_validators import (
+    validate_title_name,
     validate_start_date,
     validate_end_date
 )
@@ -19,16 +20,19 @@ class TripCreate(BaseModel):
     @field_validator('title')
     @classmethod
     def validate_title(cls, title):
-        return validate_title(title)
+        """Ensure title is not empty after stripping whitespace."""
+        return validate_title_name(title, "Trip title")
 
     @field_validator('start_date')
     @classmethod
     def validate_start_date(cls, start_date_value):
+        """Ensure start_date isn't in the past."""
         return validate_start_date(start_date_value)
 
     @field_validator('end_date')
     @classmethod
     def validate_end_date(cls, end_date_value, info):
+        """Ensure end_date is after or equal to start_date."""
         start_date_value = info.data.get('start_date')
         return validate_end_date(end_date_value, start_date_value)
 
@@ -41,7 +45,7 @@ class TripUpdate(BaseModel):
     @field_validator('title')
     @classmethod
     def validate_title(cls, title):
-        return validate_title(title) if title else None
+        return validate_title_name(title, "Trip title") if title else None
 
     @field_validator('start_date')
     @classmethod
