@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from app.main import app
 from app.db.session import get_db, Base
 from app.models.trip import Trip as TripModel
+from datetime import date, timedelta
 
 # Create a temporary database (named test_db)
 TEST_DB_URL = "postgresql+psycopg2://dar:cabbage27@localhost:5432/test_db"
@@ -53,10 +54,7 @@ def client(db_session):
     # Override get_db so FastAPI uses this test session
     def override_get_db():
         # db = TestingSessionLocal()
-        try:
-            yield db_session
-        finally:
-            db_session.close()
+        yield db_session
     
     # Clears any previous test overrides
     app.dependency_overrides.clear()
@@ -77,8 +75,8 @@ def sample_trip(db_session):
     """Inserts a sample trip before each test that needs an existing record."""
     trip = TripModel(
         title="Test Trip",
-        start_date="2025-11-01",
-        end_date="2025-11-10"
+        start_date=(date.today() + timedelta(days=10)).isoformat(),
+        end_date=(date.today() + timedelta(days=20)).isoformat()
     )
     db_session.add(trip)
     db_session.commit()
