@@ -1,4 +1,3 @@
-import pytest
 from datetime import date, datetime, timedelta
 
 # client fixture comes from conftest.py automatically — no need to import
