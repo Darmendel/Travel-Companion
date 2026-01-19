@@ -67,7 +67,7 @@ def create_trip(trip: TripCreate, db: Session = Depends(get_db)):
 # Returns a trip by its unique ID
 # SELECT * FROM trips WHERE id = ...;
 @router.get("/{trip_id}", response_model=Trip)
-def get_trip_by_id(trip_id: int, db: Session = Depends(get_db)):
+def get_trip(trip_id: int, db: Session = Depends(get_db)):
     trip = db.query(TripModel).filter(TripModel.id == trip_id).first()
 
     # If not found, raise a 404 Not Found error
