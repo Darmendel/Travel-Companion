@@ -1,3 +1,4 @@
+# app/models/trip.py
 from sqlalchemy import Column, Integer, String, Date
 from sqlalchemy.orm import relationship
 from app.db.session import Base
