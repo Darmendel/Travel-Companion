@@ -12,7 +12,7 @@ from app.validators.common_validators import (
 from app.validators.stop_validators import (
     validate_latitude,
     validate_longitude,
-    # validate_lat_lon_pair,
+    validate_realistic_coordinates,
     validate_unique_ids
 )
 
@@ -21,10 +21,10 @@ class StopCreate(BaseModel):
     """Schema for creating a new stop.
     This is what a client sends when creating a stop."""
     name: str = Field(..., min_length=1, max_length=200)
-    country: Optional[str] = Field(None, max_length=120)  # later - add validation that country exists
+    country: Optional[str] = Field(None, max_length=120)
     start_date: date
     end_date: date
-    order_index: int = Field(..., ge=0)  # Must be >= 0  # validation - in router
+    order_index: int = Field(..., ge=0)
     latitude: Optional[float] = Field(None, ge=-90, le=90)
     longitude: Optional[float] = Field(None, ge=-180, le=180)
     notes: Optional[str] = Field(None, max_length=2000)
@@ -48,32 +48,36 @@ class StopCreate(BaseModel):
         start_date_value = info.data.get('start_date')
         return validate_end_date(end_date_value, start_date_value)
 
-    @field_validator('latitude')
-    @classmethod
-    def validate_latitude(cls, lat: Optional[float]) -> Optional[float]:
-        """Validate latitude if longitude is also provided."""
-        return validate_latitude(lat)
+    @model_validator(mode='after')
+    def validate_coordinates(self) -> 'StopCreate':
+        """
+        Validate latitude/longitude pair and check for realistic coordinates.
 
-    @field_validator('longitude')
-    @classmethod
-    def validate_longitude(cls, lon: Optional[float], info) -> Optional[float]:
-        """Validate longitude and ensure both lat/lon are provided together."""
-        lat = info.data.get('latitude')
-        return validate_longitude(lat, lon)
+        Checks:
+        1. Both lat/lon must be provided together
+        2. Coordinates are not placeholder values
+        3. Coordinates roughly match the country (if provided)
+        """
+        lat = self.latitude
+        lon = self.longitude
 
-    # @model_validator(mode='after')
-    # @classmethod
-    # def validate_lat_lon_pair(cls, lat: Optional[float], lon: Optional[float]) -> Optional[float]:
-    #
+        # Check that both are provided together
+        if (lat is not None and lon is None) or (lat is None and lon is not None):
+            raise ValueError("Both latitude and longitude must be provided together or omitted together")
+
+        # Check for realistic coordinates
+        validate_realistic_coordinates(lat, lon, self.country)
+
+        return self
 
 
 class StopUpdate(BaseModel):
     """Schema for updating a stop. All fields are optional."""
     name: Optional[str] = Field(None, min_length=1, max_length=200)
-    country: Optional[str] = Field(None, max_length=120)  # what if the user tries change the country, but the stop (name) isn't in that country?
+    country: Optional[str] = Field(None, max_length=120)
     start_date: Optional[date] = None
     end_date: Optional[date] = None
-    order_index: Optional[int] = Field(None, ge=0)  # validation - in router
+    order_index: Optional[int] = Field(None, ge=0)
     latitude: Optional[float] = Field(None, ge=-90, le=90)
     longitude: Optional[float] = Field(None, ge=-180, le=180)
     notes: Optional[str] = Field(None, max_length=2000)
@@ -94,16 +98,20 @@ class StopUpdate(BaseModel):
         start_date_value = info.data.get('start_date')
         return validate_end_date(end_date_value, start_date_value) if end_date_value else None
 
-    @field_validator('latitude')
-    @classmethod
-    def validate_latitude(cls, lat: Optional[float]) -> Optional[float]:
-        return validate_latitude(lat)
+    @model_validator(mode='after')
+    def validate_coordinates(self) -> 'StopUpdate':
+        """Validate latitude/longitude pair and check for realistic coordinates."""
+        lat = self.latitude
+        lon = self.longitude
 
-    @field_validator('longitude')
-    @classmethod
-    def validate_longitude(cls, lon: Optional[float], info) -> Optional[float]:
-        lat = info.data.get('latitude')
-        return validate_longitude(lat, lon)
+        # Check that both are provided together
+        if (lat is not None and lon is None) or (lat is None and lon is not None):
+            raise ValueError("Both latitude and longitude must be provided together or omitted together")
+
+        # Check for realistic coordinates
+        validate_realistic_coordinates(lat, lon, self.country)
+
+        return self
 
 
 class Stop(StopCreate):
@@ -113,7 +121,7 @@ class Stop(StopCreate):
 
     model_config = ConfigDict(
         from_attributes=True,
-        json_schema_extra={  # An example for Swagger
+        json_schema_extra={
             "examples": [{
                 "id": 1,
                 "trip_id": 1,
@@ -140,7 +148,7 @@ class StopReorder(BaseModel):
         return validate_unique_ids(stop_ids)
 
     model_config = ConfigDict(
-        json_schema_extra={  # An example for Swagger
+        json_schema_extra={
             "examples": [{
                 "stop_ids": [3, 1, 2]
             }]
