@@ -13,7 +13,7 @@ from app.validators.common_validators import (
 # This model defines the structure expected in POST requests
 # Validates input when creating a new trip.
 class TripCreate(BaseModel):
-    title: str = Field(..., min_length=1)  # prevents empty title
+    title: str = Field(..., min_length=1, max_length=200)  # min_length=1 prevents empty title
     start_date: date
     end_date: date
 
@@ -38,7 +38,7 @@ class TripCreate(BaseModel):
 
 
 class TripUpdate(BaseModel):
-    title: Optional[str] = Field(None, min_length=1)
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
     start_date: Optional[date] = None
     end_date: Optional[date] = None
 
