@@ -1,4 +1,14 @@
 # app/services/stop_service.py
+"""
+Service layer for Stop business logic.
+
+This service handles all stop-related operations including:
+- CRUD operations for stops
+- Validation of stop data (dates, coordinates, order)
+- Date overlap checking
+- Reordering stops within a trip
+"""
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -8,21 +18,11 @@ from app.models.stop import Stop as StopModel
 from app.models.trip import Trip as TripModel
 from app.schemas.stop import StopCreate, StopUpdate
 from app.validators.stop_validators import validate_realistic_coordinates
+from app.services.trip_service import TripService
 
 
 class StopService:
     """Service layer for Stop business logic."""
-
-    @staticmethod
-    def get_trip_or_404(trip_id: int, db: Session) -> TripModel:
-        """Get trip or raise 404."""
-        trip = db.query(TripModel).filter(TripModel.id == trip_id).first()
-        if not trip:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Trip with ID {trip_id} not found"
-            )
-        return trip
 
     @staticmethod
     def get_stop_or_404(trip_id: int, stop_id: int, db: Session) -> StopModel:
@@ -40,9 +40,9 @@ class StopService:
 
     @staticmethod
     def validate_dates_within_trip(
-        start_date: date,
-        end_date: date,
-        trip: TripModel
+            start_date: date,
+            end_date: date,
+            trip: TripModel
     ) -> None:
         """Validate that stop dates are within trip dates."""
         if start_date < trip.start_date or end_date > trip.end_date:
@@ -53,11 +53,11 @@ class StopService:
 
     @staticmethod
     def check_date_overlap(
-        start_date: date,
-        end_date: date,
-        trip_id: int,
-        db: Session,
-        exclude_stop_id: Optional[int] = None
+            start_date: date,
+            end_date: date,
+            trip_id: int,
+            db: Session,
+            exclude_stop_id: Optional[int] = None
     ) -> None:
         """
         Check if stop dates overlap with existing stops by more than 1 day.
@@ -93,10 +93,10 @@ class StopService:
 
     @staticmethod
     def validate_order_index_unique(
-        order_index: int,
-        trip_id: int,
-        db: Session,
-        exclude_stop_id: Optional[int] = None
+            order_index: int,
+            trip_id: int,
+            db: Session,
+            exclude_stop_id: Optional[int] = None
     ) -> None:
         """Validate that order_index is unique within the trip."""
         query = db.query(StopModel).filter(
@@ -115,9 +115,9 @@ class StopService:
 
     @staticmethod
     def validate_coordinates_with_country(
-        latitude: Optional[float],
-        longitude: Optional[float],
-        country: Optional[str]
+            latitude: Optional[float],
+            longitude: Optional[float],
+            country: Optional[str]
     ) -> None:
         """
         Validate that coordinates match the country.
@@ -130,22 +130,22 @@ class StopService:
 
     @staticmethod
     def create_stop(
-        trip_id: int,
-        stop_data: StopCreate,
-        db: Session
+            trip_id: int,
+            stop_data: StopCreate,
+            db: Session
     ) -> StopModel:
         """
         Create a new stop with full validation.
 
         Validates:
-        - Trip exists
+        - Trip exists (via TripService)
         - Stop dates are within trip dates
         - No date overlaps (allows 1-day overlap)
         - order_index is unique
         - Coordinates match country (done by Pydantic in StopCreate)
         """
-        # Verify trip exists
-        trip = StopService.get_trip_or_404(trip_id, db)
+        # Verify trip exists using TripService (reuse!)
+        trip = TripService.get_trip_or_404(trip_id, db)
 
         # Validate dates within trip
         StopService.validate_dates_within_trip(
@@ -178,9 +178,14 @@ class StopService:
 
     @staticmethod
     def get_all_stops(trip_id: int, db: Session) -> List[StopModel]:
-        """Get all stops for a trip, ordered by order_index."""
-        # Verify trip exists
-        StopService.get_trip_or_404(trip_id, db)
+        """
+        Get all stops for a trip, ordered by order_index.
+
+        Validates:
+        - Trip exists (via TripService)
+        """
+        # Verify trip exists using TripService (reuse!)
+        TripService.get_trip_or_404(trip_id, db)
 
         stops = db.query(StopModel).filter(
             StopModel.trip_id == trip_id
@@ -190,23 +195,23 @@ class StopService:
 
     @staticmethod
     def update_stop(
-        trip_id: int,
-        stop_id: int,
-        stop_update: StopUpdate,
-        db: Session
+            trip_id: int,
+            stop_id: int,
+            stop_update: StopUpdate,
+            db: Session
     ) -> StopModel:
         """
         Update a stop with full validation.
 
         Validates:
-        - Trip exists
+        - Trip exists (via TripService)
         - Stop exists
         - If dates updated: within trip dates, no overlaps
         - If order_index updated: unique
         - If country/coordinates updated: they match each other
         """
-        # Verify trip exists
-        StopService.get_trip_or_404(trip_id, db)
+        # Verify trip exists using TripService (reuse!)
+        TripService.get_trip_or_404(trip_id, db)
 
         # Get the stop
         stop = StopService.get_stop_or_404(trip_id, stop_id, db)
@@ -274,22 +279,22 @@ class StopService:
 
     @staticmethod
     def reorder_stops(
-        trip_id: int,
-        stop_ids: List[int],
-        db: Session
+            trip_id: int,
+            stop_ids: List[int],
+            db: Session
     ) -> List[StopModel]:
         """
         Reorder stops in a trip.
 
         Validates:
-        - Trip exists
+        - Trip exists (via TripService)
         - All provided stop IDs exist in this trip
         - No missing or extra IDs
 
         Uses two-phase update to avoid unique constraint violations.
         """
-        # Verify trip exists
-        StopService.get_trip_or_404(trip_id, db)
+        # Verify trip exists using TripService (reuse!)
+        TripService.get_trip_or_404(trip_id, db)
 
         # Get all stops for this trip
         stops = db.query(StopModel).filter(StopModel.trip_id == trip_id).all()

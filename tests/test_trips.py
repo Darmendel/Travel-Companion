@@ -8,7 +8,7 @@ def test_create_trip_success(client):
         "end_date": (date.today() + timedelta(days=20)).isoformat()
     })
     print(response.status_code, response.json())
-    assert response.status_code == 200
+    assert response.status_code == 201
     data = response.json()
     assert data["title"] == "Second Test Trip"
 
