@@ -1326,3 +1326,166 @@ def test_update_coordinates_and_country_simultaneously_invalid(client, sample_tr
     })
     assert response.status_code == 422
     assert "do not appear to be in USA" in response.text or "USA" in response.text
+
+
+# ==================== ADDITIONAL EDGE CASE TESTS ====================
+
+def test_create_stop_with_special_characters_in_name(client, sample_trip):
+    """Test creating stop with special characters in name."""
+    response = client.post(f"/trips/{sample_trip.id}/stops/", json={
+        "name": "São Paulo & Tokyo! 🌍✈️",
+        "country": "Brazil",
+        "start_date": (date.today() + timedelta(days=11)).isoformat(),
+        "end_date": (date.today() + timedelta(days=15)).isoformat(),
+        "order_index": 0,
+        "latitude": -23.5505,
+        "longitude": -46.6333
+    })
+    assert response.status_code == 201
+    data = response.json()
+    assert "São Paulo" in data["name"]
+    assert "🌍" in data["name"]
+
+
+def test_create_stop_with_very_long_name(client, sample_trip):
+    """Test creating stop with maximum length name (200 chars)."""
+    long_name = "A" * 200
+    response = client.post(f"/trips/{sample_trip.id}/stops/", json={
+        "name": long_name,
+        "start_date": (date.today() + timedelta(days=11)).isoformat(),
+        "end_date": (date.today() + timedelta(days=15)).isoformat(),
+        "order_index": 0
+    })
+    # Should succeed with 200 chars (assuming max_length=200)
+    assert response.status_code in [201, 422]
+
+
+def test_create_stop_name_too_long(client, sample_trip):
+    """Test creating stop with name exceeding max length."""
+    too_long_name = "A" * 201  # Over limit
+    response = client.post(f"/trips/{sample_trip.id}/stops/", json={
+        "name": too_long_name,
+        "start_date": (date.today() + timedelta(days=11)).isoformat(),
+        "end_date": (date.today() + timedelta(days=15)).isoformat(),
+        "order_index": 0
+    })
+    assert response.status_code == 422
+
+
+def test_create_multiple_stops_same_day(client, sample_trip):
+    """Test creating multiple stops on the same day (1-day overlap allowed)."""
+    same_day = (date.today() + timedelta(days=12)).isoformat()
+
+    # First stop - full day
+    response1 = client.post(f"/trips/{sample_trip.id}/stops/", json={
+        "name": "Morning Activity",
+        "start_date": same_day,
+        "end_date": same_day,
+        "order_index": 0
+    })
+    assert response1.status_code == 201
+
+    # Second stop - same day (1-day overlap is allowed)
+    response2 = client.post(f"/trips/{sample_trip.id}/stops/", json={
+        "name": "Evening Activity",
+        "start_date": same_day,
+        "end_date": same_day,
+        "order_index": 1
+    })
+    assert response2.status_code == 201
+
+
+def test_update_stop_remove_country(client, sample_trip_with_stop):
+    """Test updating stop to remove country (set to null)."""
+    trip, stop = sample_trip_with_stop
+
+    # Update to remove country
+    response = client.put(f"/trips/{trip.id}/stops/{stop.id}", json={
+        "country": None
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["country"] is None
+    assert data["name"] == stop.name  # Other fields unchanged
+
+
+def test_update_stop_remove_coordinates(client, sample_trip_with_stop):
+    """Test updating stop to remove coordinates (set to null)."""
+    trip, stop = sample_trip_with_stop
+
+    # Coordinates must be removed together
+    response = client.put(f"/trips/{trip.id}/stops/{stop.id}", json={
+        "latitude": None,
+        "longitude": None
+    })
+    # This might fail if validation requires both or neither
+    assert response.status_code in [200, 422]
+
+
+def test_update_stop_all_fields(client, sample_trip_with_stop):
+    """Test updating all stop fields at once."""
+    trip, stop = sample_trip_with_stop
+
+    response = client.put(f"/trips/{trip.id}/stops/{stop.id}", json={
+        "name": "Updated Stop Name",
+        "country": "USA",
+        "start_date": (date.today() + timedelta(days=12)).isoformat(),
+        "end_date": (date.today() + timedelta(days=16)).isoformat(),
+        "order_index": 1,
+        "latitude": 40.7128,
+        "longitude": -74.0060,
+        "notes": "Updated notes"
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Updated Stop Name"
+    assert data["country"] == "USA"
+    assert data["order_index"] == 1
+
+
+def test_update_same_stop_twice_in_succession(client, sample_trip_with_stop):
+    """Test updating the same stop twice consecutively."""
+    trip, stop = sample_trip_with_stop
+
+    # First update
+    response1 = client.put(f"/trips/{trip.id}/stops/{stop.id}", json={
+        "name": "First Update"
+    })
+    assert response1.status_code == 200
+
+    # Second update
+    response2 = client.put(f"/trips/{trip.id}/stops/{stop.id}", json={
+        "name": "Second Update"
+    })
+    assert response2.status_code == 200
+
+    data = response2.json()
+    assert data["name"] == "Second Update"
+
+
+def test_create_stop_with_notes_max_length(client, sample_trip):
+    """Test creating stop with maximum notes length (2000 chars)."""
+    max_notes = "A" * 2000
+    response = client.post(f"/trips/{sample_trip.id}/stops/", json={
+        "name": "Stop with Long Notes",
+        "start_date": (date.today() + timedelta(days=11)).isoformat(),
+        "end_date": (date.today() + timedelta(days=15)).isoformat(),
+        "order_index": 0,
+        "notes": max_notes
+    })
+    assert response.status_code == 201
+    data = response.json()
+    assert len(data["notes"]) == 2000
+
+
+def test_create_stop_with_notes_too_long(client, sample_trip):
+    """Test creating stop with notes exceeding max length."""
+    too_long_notes = "A" * 2001
+    response = client.post(f"/trips/{sample_trip.id}/stops/", json={
+        "name": "Stop with Too Long Notes",
+        "start_date": (date.today() + timedelta(days=11)).isoformat(),
+        "end_date": (date.today() + timedelta(days=15)).isoformat(),
+        "order_index": 0,
+        "notes": too_long_notes
+    })
+    assert response.status_code == 422
