@@ -2,6 +2,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import timedelta
 from app.db.session import get_db
 from app.models.stop import Stop as StopModel
 from app.models.trip import Trip as TripModel
@@ -29,6 +30,45 @@ def get_stop(trip_id: int, stop_id: int, db: Session) -> StopModel:
     return stop
 
 
+def check_date_overlap(new_stop_start, new_stop_end, trip_id: int, db: Session, exclude_stop_id: int = None):
+    """
+    Check if new stop dates overlap with existing stops by more than 1 day.
+
+    Allows:
+    - Same-day transition (Stop A ends on day X, Stop B starts on day X)
+    - One-day overlap (for travel days)
+
+    Warns/Blocks:
+    - Overlaps of more than 1 day
+    """
+    # Get all other stops in the trip
+    query = db.query(StopModel).filter(StopModel.trip_id == trip_id)
+    if exclude_stop_id:
+        query = query.filter(StopModel.id != exclude_stop_id)
+
+    existing_stops = query.all()
+
+    for stop in existing_stops:
+        # Calculate overlap
+        overlap_start = max(new_stop_start, stop.start_date)
+        overlap_end = min(new_stop_end, stop.end_date)
+
+        if overlap_start <= overlap_end:
+            # There is an overlap
+            overlap_days = (overlap_end - overlap_start).days + 1
+
+            # Allow up to 1 day overlap (transition day)
+            if overlap_days > 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Stop dates overlap with '{stop.name}' by {overlap_days} days "
+                        f"({overlap_start} to {overlap_end}). "
+                        f"Maximum allowed overlap is 1 day for transition."
+                    )
+                )
+
+
 @router.post("/", response_model=Stop, status_code=201)
 def create_stop(
         trip_id: int,
@@ -41,6 +81,7 @@ def create_stop(
     - Trip exists
     - Stop dates are within trip dates
     - order_index is unique within the trip
+    - No overlaps with existing stops (allows 1-day overlap for transitions)
     """
     # Verify trip exists
     trip = get_trip(trip_id, db)
@@ -51,6 +92,9 @@ def create_stop(
             status_code=400,
             detail=f"Stop dates must be within trip dates ({trip.start_date} to {trip.end_date})"
         )
+
+    # Check for date overlaps
+    check_date_overlap(stop.start_date, stop.end_date, trip_id, db)
 
     # Check if order_index already exists for this trip
     existing_stop = db.query(StopModel).filter(
@@ -87,87 +131,6 @@ def get_all_stops(
     ).order_by(StopModel.order_index).all()
 
     return stops
-
-
-@router.get("/{stop_id}", response_model=Stop)
-def get_stop_by_id(
-        trip_id: int,
-        stop_id: int,
-        db: Session = Depends(get_db)
-):
-    """Get a specific stop by ID."""
-    stop = get_stop(trip_id, stop_id, db)
-    return stop
-
-
-@router.put("/{stop_id}", response_model=Stop)
-def update_stop(
-        trip_id: int,
-        stop_id: int,
-        stop_update: StopUpdate,
-        db: Session = Depends(get_db)
-):
-    """Update a stop.
-
-    Validates:
-    - Stop exists
-    - If dates are updated, they're within trip dates
-    - If order_index is updated, it's unique
-    """
-    # Get the stop
-    stop = get_stop(trip_id, stop_id, db)  # get_stop raises 404 if trip_id/stop_id don't exist
-    trip = stop.trip
-
-    # Get update data (only provided fields)
-    update_data = stop_update.model_dump(exclude_unset=True)
-
-    # Validate dates if they're being updated
-    new_start = update_data.get("start_date", stop.start_date)
-    new_end = update_data.get("end_date", stop.end_date)
-
-    # Check that stop dates are within trip dates
-    if new_start < trip.start_date or new_end > trip.end_date:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Stop dates must be within trip dates ({trip.start_date} to {trip.end_date})"
-        )
-
-    # If order_index is being updated, check it's unique
-    if "order_index" in update_data:
-        new_order = update_data["order_index"]
-        existing_stop = db.query(StopModel).filter(
-            StopModel.trip_id == trip_id,
-            StopModel.order_index == new_order,
-            StopModel.id != stop_id  # Exclude current stop
-        ).first()
-
-        if existing_stop:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Stop with order_index {new_order} already exists in this trip"
-            )
-
-    # Apply updates
-    for key, value in update_data.items():
-        setattr(stop, key, value)
-
-    db.commit()
-    db.refresh(stop)
-    return stop
-
-
-@router.delete("/{stop_id}", response_model=Stop)
-def delete_stop(
-        trip_id: int,
-        stop_id: int,
-        db: Session = Depends(get_db)
-):
-    """Delete a stop from a trip."""
-    stop = get_stop(trip_id, stop_id, db)
-
-    db.delete(stop)
-    db.commit()
-    return stop
 
 
 @router.put("/reorder", response_model=List[Stop])
@@ -225,3 +188,93 @@ def reorder_stops(
     ).order_by(StopModel.order_index).all()
 
     return updated_stops
+
+
+@router.get("/{stop_id}", response_model=Stop)
+def get_stop_by_id(
+        trip_id: int,
+        stop_id: int,
+        db: Session = Depends(get_db)
+):
+    """Get a specific stop by ID."""
+    stop = get_stop(trip_id, stop_id, db)
+    return stop
+
+
+@router.put("/{stop_id}", response_model=Stop)
+def update_stop(
+        trip_id: int,
+        stop_id: int,
+        stop_update: StopUpdate,
+        db: Session = Depends(get_db)
+):
+    """Update a stop.
+
+    Validates:
+    - Trip exists
+    - Stop exists
+    - If dates are updated, they're within trip dates
+    - If order_index is updated, it's unique
+    - No overlaps with other stops (allows 1-day overlap)
+    """
+    # Verify trip exists
+    get_trip(trip_id, db)
+
+    # Get the stop
+    stop = get_stop(trip_id, stop_id, db)
+    trip = stop.trip
+
+    # Get update data (only provided fields)
+    update_data = stop_update.model_dump(exclude_unset=True)
+
+    # Validate dates if they're being updated
+    new_start = update_data.get("start_date", stop.start_date)
+    new_end = update_data.get("end_date", stop.end_date)
+
+    # Check that stop dates are within trip dates
+    if new_start < trip.start_date or new_end > trip.end_date:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Stop dates must be within trip dates ({trip.start_date} to {trip.end_date})"
+        )
+
+    # Check for date overlaps (excluding current stop)
+    if "start_date" in update_data or "end_date" in update_data:
+        check_date_overlap(new_start, new_end, trip_id, db, exclude_stop_id=stop_id)
+
+    # If order_index is being updated, check it's unique
+    if "order_index" in update_data:
+        new_order = update_data["order_index"]
+        existing_stop = db.query(StopModel).filter(
+            StopModel.trip_id == trip_id,
+            StopModel.order_index == new_order,
+            StopModel.id != stop_id  # Exclude current stop
+        ).first()
+
+        if existing_stop:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Stop with order_index {new_order} already exists in this trip"
+            )
+
+    # Apply updates
+    for key, value in update_data.items():
+        setattr(stop, key, value)
+
+    db.commit()
+    db.refresh(stop)
+    return stop
+
+
+@router.delete("/{stop_id}", response_model=Stop)
+def delete_stop(
+        trip_id: int,
+        stop_id: int,
+        db: Session = Depends(get_db)
+):
+    """Delete a stop from a trip."""
+    stop = get_stop(trip_id, stop_id, db)
+
+    db.delete(stop)
+    db.commit()
+    return stop
