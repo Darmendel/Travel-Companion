@@ -1,6 +1,6 @@
 # app/routers/stops.py
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 
 from app.db.session import get_db
@@ -11,10 +11,10 @@ router = APIRouter(prefix="/trips/{trip_id}/stops", tags=["Stops"])
 
 
 @router.post("/", response_model=Stop, status_code=201)
-def create_stop(
+async def create_stop(
         trip_id: int,
         stop: StopCreate,
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_db)
 ):
     """Create a new stop for a trip.
 
@@ -24,23 +24,23 @@ def create_stop(
     - order_index is unique within the trip
     - No overlaps with existing stops (allows 1-day overlap for transitions)
     """
-    return StopService.create_stop(trip_id, stop, db)
+    return await StopService.create_stop(trip_id, stop, db)
 
 
 @router.get("/", response_model=List[Stop])
-def get_all_stops(
+async def get_all_stops(
         trip_id: int,
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_db)
 ):
     """Get all stops for a trip, ordered by order_index."""
-    return StopService.get_all_stops(trip_id, db)
+    return await StopService.get_all_stops(trip_id, db)
 
 
 @router.put("/reorder", response_model=List[Stop])
-def reorder_stops(
+async def reorder_stops(
         trip_id: int,
         reorder: StopReorder,
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_db)
 ):
     """Reorder stops in a trip.
 
@@ -56,25 +56,25 @@ def reorder_stops(
         - Stop 21 -> order_index 1
         - Stop 22 -> order_index 2
     """
-    return StopService.reorder_stops(trip_id, reorder.stop_ids, db)
+    return await StopService.reorder_stops(trip_id, reorder.stop_ids, db)
 
 
 @router.get("/{stop_id}", response_model=Stop)
-def get_stop_by_id(
+async def get_stop_by_id(
         trip_id: int,
         stop_id: int,
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_db)
 ):
     """Get a specific stop by ID."""
-    return StopService.get_stop(trip_id, stop_id, db)
+    return await StopService.get_stop(trip_id, stop_id, db)
 
 
 @router.put("/{stop_id}", response_model=Stop)
-def update_stop(
+async def update_stop(
         trip_id: int,
         stop_id: int,
         stop_update: StopUpdate,
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_db)
 ):
     """Update a stop.
 
@@ -86,14 +86,14 @@ def update_stop(
     - No overlaps with other stops (allows 1-day overlap)
     - Coordinates match country
     """
-    return StopService.update_stop(trip_id, stop_id, stop_update, db)
+    return await StopService.update_stop(trip_id, stop_id, stop_update, db)
 
 
 @router.delete("/{stop_id}", response_model=Stop)
-def delete_stop(
+async def delete_stop(
         trip_id: int,
         stop_id: int,
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_db)
 ):
     """Delete a stop from a trip."""
-    return StopService.delete_stop(trip_id, stop_id, db)
+    return await StopService.delete_stop(trip_id, stop_id, db)
