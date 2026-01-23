@@ -66,7 +66,7 @@ def get_stop_by_id(
         db: Session = Depends(get_db)
 ):
     """Get a specific stop by ID."""
-    return StopService.get_stop_or_404(trip_id, stop_id, db)
+    return StopService.get_stop(trip_id, stop_id, db)
 
 
 @router.put("/{stop_id}", response_model=Stop)

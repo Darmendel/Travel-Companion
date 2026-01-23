@@ -48,6 +48,12 @@ class StopCreate(BaseModel):
         start_date_value = info.data.get('start_date')
         return validate_end_date(end_date_value, start_date_value)
 
+    # @field_validator('latitude')
+    # @classmethod
+    # def validate_latitude(cls, latitude: Optional[float]) -> Optional[float]:
+    #     """Ensure latitude is between -90 and 90."""
+    #     return validate_longitude(latitude)
+
     @model_validator(mode='after')
     def validate_coordinates(self) -> 'StopCreate':
         """
@@ -64,6 +70,9 @@ class StopCreate(BaseModel):
         # Check that both are provided together
         if (lat is not None and lon is None) or (lat is None and lon is not None):
             raise ValueError("Both latitude and longitude must be provided together or omitted together")
+
+        # validate_longitude(lon)
+        # validate_latitude(lat)
 
         # Check for realistic coordinates
         validate_realistic_coordinates(lat, lon, self.country)

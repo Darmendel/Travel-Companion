@@ -1,6 +1,6 @@
 # app/services/trip_service.py
 """
-Service layer for Trip business logic.
+Async Service layer for Trip business logic.
 
 This service handles all trip-related operations including:
 - CRUD operations (Create, Read, Update, Delete)
@@ -9,7 +9,8 @@ This service handles all trip-related operations including:
 """
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from typing import List
 from datetime import date
 
@@ -18,24 +19,16 @@ from app.schemas.trip import TripCreate, TripUpdate
 
 
 class TripService:
-    """Service layer for Trip business logic."""
+    """Async service layer for Trip business logic."""
 
     @staticmethod
-    def get_trip_or_404(trip_id: int, db: Session) -> TripModel:
-        """
-        Get trip by ID or raise 404 if not found.
+    async def get_trip(trip_id: int, db: AsyncSession) -> TripModel:
+        """Get trip by ID or raise 404 if not found."""
+        result = await db.execute(
+            select(TripModel).filter(TripModel.id == trip_id)
+        )
+        trip = result.scalar_one_or_none()
 
-        Args:
-            trip_id: The ID of the trip to retrieve
-            db: Database session
-
-        Returns:
-            TripModel: The requested trip
-
-        Raises:
-            HTTPException: 404 if trip not found
-        """
-        trip = db.query(TripModel).filter(TripModel.id == trip_id).first()
         if not trip:
             raise HTTPException(
                 status_code=404,
@@ -44,23 +37,24 @@ class TripService:
         return trip
 
     @staticmethod
-    def get_all_trips(db: Session) -> List[TripModel]:
+    async def get_all_trips(db: AsyncSession) -> List[TripModel]:
         """
         Get all trips from the database.
 
         Equivalent to: SELECT * FROM trips;
 
         Args:
-            db: Database session
+            db: Async database session
 
         Returns:
             List[TripModel]: List of all trips
         """
-        trips = db.query(TripModel).all()  # SELECT * FROM trips;
-        return trips
+        result = await db.execute(select(TripModel))
+        trips = result.scalars().all()
+        return list(trips)
 
     @staticmethod
-    def create_trip(trip_data: TripCreate, db: Session) -> TripModel:
+    async def create_trip(trip_data: TripCreate, db: AsyncSession) -> TripModel:
         """
         Create a new trip.
 
@@ -73,7 +67,7 @@ class TripService:
 
         Args:
             trip_data: Validated trip data from Pydantic
-            db: Database session
+            db: Async database session
 
         Returns:
             TripModel: The newly created trip with generated ID
@@ -83,17 +77,17 @@ class TripService:
         # **trip_data.model_dump() unpacks that dict as keyword arguments
         new_trip = TripModel(**trip_data.model_dump())
 
-        db.add(new_trip)  # Stage the trip for insertion
-        db.commit()  # Save to database
-        db.refresh(new_trip)  # Get the newly generated ID and updated state
+        db.add(new_trip)
+        await db.commit()
+        await db.refresh(new_trip)  # Get the newly generated ID and updated state
 
         return new_trip
 
     @staticmethod
-    def update_trip(
+    async def update_trip(
             trip_id: int,
             trip_update: TripUpdate,
-            db: Session
+            db: AsyncSession
     ) -> TripModel:
         """
         Update an existing trip.
@@ -107,7 +101,7 @@ class TripService:
         Args:
             trip_id: ID of the trip to update
             trip_update: Partial update data (only provided fields)
-            db: Database session
+            db: Async database session
 
         Returns:
             TripModel: The updated trip
@@ -115,33 +109,29 @@ class TripService:
         Raises:
             HTTPException: 404 if trip not found, 400 if dates invalid
         """
-        # Get the trip or raise 404
-        trip = TripService.get_trip_or_404(trip_id, db)
+        trip = await TripService.get_trip(trip_id, db)
 
         # Get only the fields that were provided in the request
         # exclude_unset=True means: only include fields the user sent
         update_data = trip_update.model_dump(exclude_unset=True)
 
         # Validate dates if they're being updated
-        # We need to check the combination of new and existing values
         new_start = update_data.get("start_date", trip.start_date)
         new_end = update_data.get("end_date", trip.end_date)
 
         TripService.validate_trip_date_range(new_start, new_end)
 
         # Apply the updates
-        # setattr(object, attribute_name, value) sets object.attribute_name = value
-        # We use this because we don't know which fields were provided
         for key, value in update_data.items():
             setattr(trip, key, value)
 
-        db.commit()  # Save changes to database
-        db.refresh(trip)  # Refresh to get any DB-side changes
+        await db.commit()
+        await db.refresh(trip)
 
         return trip
 
     @staticmethod
-    def delete_trip(trip_id: int, db: Session) -> TripModel:
+    async def delete_trip(trip_id: int, db: AsyncSession) -> TripModel:
         """
         Delete a trip by ID.
 
@@ -152,7 +142,7 @@ class TripService:
 
         Args:
             trip_id: ID of the trip to delete
-            db: Database session
+            db: Async database session
 
         Returns:
             TripModel: The deleted trip (before deletion)
@@ -160,11 +150,10 @@ class TripService:
         Raises:
             HTTPException: 404 if trip not found
         """
-        # Get the trip or raise 404
-        trip = TripService.get_trip_or_404(trip_id, db)
+        trip = await TripService.get_trip(trip_id, db)
 
-        db.delete(trip)  # Mark for deletion
-        db.commit()  # Execute the DELETE
+        await db.delete(trip)
+        await db.commit()
 
         return trip
 
