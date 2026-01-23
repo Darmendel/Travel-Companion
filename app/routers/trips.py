@@ -67,7 +67,7 @@ def get_trip(trip_id: int, db: Session = Depends(get_db)):
 
     Raises: 404 if not found
     """
-    return TripService.get_trip_or_404(trip_id, db)
+    return TripService.get_trip(trip_id, db)
 
 
 @router.put("/{trip_id}", response_model=Trip)
