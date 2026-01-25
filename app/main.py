@@ -1,21 +1,19 @@
 # app/main.py
 from fastapi import FastAPI
-from app.routers import trips, stops
-from app.db.session import Base, engine
+from app.routers import trips, stops, auth
 
-# Create database tables
-# Base.metadata.create_all(bind=engine)
 
 # Create a FastAPI app instance
 app = FastAPI(
     title="Travel Planning API",
     description="API for planning trips with multiple stops",
-    version="1.0.0"
+    version="2.0.0"
 )
 
 # Include routers
-app.include_router(trips.router)  # Register the /trips routes into the app
+app.include_router(trips.router)
 app.include_router(stops.router)
+app.include_router(auth.router)
 
 # route: GET /
 @app.get("/")
