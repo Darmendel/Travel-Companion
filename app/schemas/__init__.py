@@ -1,4 +1,4 @@
 # app/schemas/__init__.py
-from . import trip, stop
+from . import trip, stop, user
 
-__all__ = ["trip", "stop"]
+__all__ = ["trip", "stop", "user"]
