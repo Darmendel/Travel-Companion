@@ -1,9 +1,13 @@
+# tests/test_trips.py
 from datetime import date, datetime, timedelta
+import pytest
 
 
 # client fixture comes from conftest.py automatically – no need to import
-def test_create_trip_success(client):
-    response = client.post("/trips/", json={
+
+@pytest.mark.asyncio
+async def test_create_trip_success(client):
+    response = await client.post("/trips/", json={
         "title": "Second Test Trip",
         "start_date": (date.today() + timedelta(days=10)).isoformat(),
         "end_date": (date.today() + timedelta(days=20)).isoformat()
@@ -13,24 +17,27 @@ def test_create_trip_success(client):
     assert data["title"] == "Second Test Trip"
 
 
-def test_create_trip_missing_fields(client):
-    response = client.post("/trips/", json={
+@pytest.mark.asyncio
+async def test_create_trip_missing_fields(client):
+    response = await client.post("/trips/", json={
         "title": "Incomplete Trip"
         # Missing dates
     })
     assert response.status_code == 422  # Unprocessable Entity
 
 
-def test_create_trip_missing_title(client):
-    response = client.post("/trips/", json={
+@pytest.mark.asyncio
+async def test_create_trip_missing_title(client):
+    response = await client.post("/trips/", json={
         "start_date": (date.today() + timedelta(days=10)).isoformat(),
         "end_date": (date.today() + timedelta(days=20)).isoformat()
     })
     assert response.status_code == 422
 
 
-def test_create_trip_empty_title(client):
-    response = client.post("/trips/", json={
+@pytest.mark.asyncio
+async def test_create_trip_empty_title(client):
+    response = await client.post("/trips/", json={
         "title": "    ",
         "start_date": (date.today() + timedelta(days=10)).isoformat(),
         "end_date": (date.today() + timedelta(days=20)).isoformat()
@@ -39,12 +46,13 @@ def test_create_trip_empty_title(client):
     assert "title must not be empty" in response.text
 
 
-def test_create_trip_invalid_start_date(client):
+@pytest.mark.asyncio
+async def test_create_trip_invalid_start_date(client):
     today = datetime.today().date()
     past_date = (datetime.today() - timedelta(days=1)).date().isoformat()
     future_date = (datetime.today() + timedelta(days=30)).date().isoformat()
 
-    response = client.post("/trips/", json={
+    response = await client.post("/trips/", json={
         "title": "Broken Trip",
         "start_date": past_date,
         "end_date": future_date
@@ -53,11 +61,12 @@ def test_create_trip_invalid_start_date(client):
     assert f"start_date {past_date} cannot be in the past (today is {today})" in response.text
 
 
-def test_create_trip_invalid_end_date(client):
+@pytest.mark.asyncio
+async def test_create_trip_invalid_end_date(client):
     # Pydantic checks the dates *before* it gets to the trip service.
     # FastAPI returns ValidationError (422)
 
-    response = client.post("/trips/", json={
+    response = await client.post("/trips/", json={
         "title": "Broken Trip",
         "start_date": (date.today() + timedelta(days=20)).isoformat(),
         "end_date": (date.today() + timedelta(days=10)).isoformat()
@@ -66,30 +75,34 @@ def test_create_trip_invalid_end_date(client):
     assert "end_date must be after or equal to start_date" in response.text
 
 
-def test_get_all_trips(client, sample_trip):
-    response = client.get("/trips/")
+@pytest.mark.asyncio
+async def test_get_all_trips(client, sample_trip):
+    response = await client.get("/trips/")
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     assert any(trip["title"] == "Test Trip" for trip in data)
 
 
-def test_get_trip_by_id_success(client, sample_trip):
-    response = client.get(f"/trips/{sample_trip.id}")
+@pytest.mark.asyncio
+async def test_get_trip_by_id_success(client, sample_trip):
+    response = await client.get(f"/trips/{sample_trip.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == sample_trip.id
     assert data["title"] == "Test Trip"
 
 
-def test_get_trip_by_id_not_found(client):
-    response = client.get("/trips/999")
+@pytest.mark.asyncio
+async def test_get_trip_by_id_not_found(client):
+    response = await client.get("/trips/999")
     assert response.status_code == 404
     assert response.json()["detail"] == "Trip with ID 999 not found"
 
 
-def test_update_trip_title_success(client, sample_trip):
-    response = client.put(f"/trips/{sample_trip.id}", json={
+@pytest.mark.asyncio
+async def test_update_trip_title_success(client, sample_trip):
+    response = await client.put(f"/trips/{sample_trip.id}", json={
         "title": "Short Trip"
     })
     assert response.status_code == 200
@@ -97,18 +110,20 @@ def test_update_trip_title_success(client, sample_trip):
     assert data["title"] == "Short Trip"
 
 
-def test_update_trip_not_found(client):
-    response = client.put("/trips/999", json={
+@pytest.mark.asyncio
+async def test_update_trip_not_found(client):
+    response = await client.put("/trips/999", json={
         "title": "Ghost Trip"
     })
     assert response.status_code == 404
     assert response.json()["detail"] == "Trip with ID 999 not found"
 
 
-def test_update_trip_invalid_dates_pydantic(client, sample_trip):
+@pytest.mark.asyncio
+async def test_update_trip_invalid_dates_pydantic(client, sample_trip):
     """Test Pydantic validation catches invalid dates when both are in request."""
     # When both dates are in the request, Pydantic validator catches it
-    response = client.put(f"/trips/{sample_trip.id}", json={
+    response = await client.put(f"/trips/{sample_trip.id}", json={
         "start_date": (date.today() + timedelta(days=20)).isoformat(),
         "end_date": (date.today() + timedelta(days=10)).isoformat()
     })
@@ -116,37 +131,41 @@ def test_update_trip_invalid_dates_pydantic(client, sample_trip):
     assert "end_date must be after" in response.text.lower()
 
 
-def test_update_trip_invalid_dates_service(client, sample_trip):
+@pytest.mark.asyncio
+async def test_update_trip_invalid_dates_service(client, sample_trip):
     """Test Service validation catches invalid dates when combining request with DB data."""
     # sample_trip has start_date = today + 10
     # Update only end_date to be before the existing start_date
-    response = client.put(f"/trips/{sample_trip.id}", json={
+    response = await client.put(f"/trips/{sample_trip.id}", json={
         "end_date": (date.today() + timedelta(days=5)).isoformat()  # Before existing start!
     })
     assert response.status_code == 400  # Service validation
     assert "must be after" in response.text.lower()  # Fixed: more flexible match
 
 
-def test_delete_trip_success(client, sample_trip):
-    response = client.delete(f"/trips/{sample_trip.id}")
+@pytest.mark.asyncio
+async def test_delete_trip_success(client, sample_trip):
+    response = await client.delete(f"/trips/{sample_trip.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == sample_trip.id
     assert data["title"] == "Test Trip"
 
 
-def test_delete_trip_not_found(client):
-    response = client.delete("/trips/999")
+@pytest.mark.asyncio
+async def test_delete_trip_not_found(client):
+    response = await client.delete("/trips/999")
     assert response.status_code == 404
     assert response.json()["detail"] == "Trip with ID 999 not found"
 
 
 # ==================== CREATE TRIP - ADDITIONAL TESTS ====================
 
-def test_create_trip_same_start_and_end_date(client):
+@pytest.mark.asyncio
+async def test_create_trip_same_start_and_end_date(client):
     """Test creating a trip that starts and ends on the same day."""
     same_date = (date.today() + timedelta(days=10)).isoformat()
-    response = client.post("/trips/", json={
+    response = await client.post("/trips/", json={
         "title": "One Day Trip",
         "start_date": same_date,
         "end_date": same_date
@@ -156,9 +175,10 @@ def test_create_trip_same_start_and_end_date(client):
     assert data["start_date"] == data["end_date"]
 
 
-def test_create_trip_very_long_duration(client):
+@pytest.mark.asyncio
+async def test_create_trip_very_long_duration(client):
     """Test creating a trip with very long duration (1 year)."""
-    response = client.post("/trips/", json={
+    response = await client.post("/trips/", json={
         "title": "Year Long Adventure",
         "start_date": (date.today() + timedelta(days=10)).isoformat(),
         "end_date": (date.today() + timedelta(days=375)).isoformat()
@@ -168,9 +188,10 @@ def test_create_trip_very_long_duration(client):
     assert data["title"] == "Year Long Adventure"
 
 
-def test_create_trip_with_special_characters_in_title(client):
+@pytest.mark.asyncio
+async def test_create_trip_with_special_characters_in_title(client):
     """Test creating trip with special characters in title."""
-    response = client.post("/trips/", json={
+    response = await client.post("/trips/", json={
         "title": "Trip to São Paulo & Tokyo! 🌍",
         "start_date": (date.today() + timedelta(days=10)).isoformat(),
         "end_date": (date.today() + timedelta(days=20)).isoformat()
@@ -180,10 +201,11 @@ def test_create_trip_with_special_characters_in_title(client):
     assert "São Paulo" in data["title"]
 
 
-def test_create_trip_with_very_long_title(client):
+@pytest.mark.asyncio
+async def test_create_trip_with_very_long_title(client):
     """Test creating trip with maximum length title."""
     long_title = "A" * 200  # Assuming max is around 200-255
-    response = client.post("/trips/", json={
+    response = await client.post("/trips/", json={
         "title": long_title,
         "start_date": (date.today() + timedelta(days=10)).isoformat(),
         "end_date": (date.today() + timedelta(days=20)).isoformat()
@@ -192,9 +214,10 @@ def test_create_trip_with_very_long_title(client):
     assert response.status_code in [201, 422]
 
 
-def test_create_trip_start_date_is_today(client):
+@pytest.mark.asyncio
+async def test_create_trip_start_date_is_today(client):
     """Test creating trip starting today (edge case)."""
-    response = client.post("/trips/", json={
+    response = await client.post("/trips/", json={
         "title": "Starting Today",
         "start_date": date.today().isoformat(),
         "end_date": (date.today() + timedelta(days=10)).isoformat()
@@ -202,9 +225,10 @@ def test_create_trip_start_date_is_today(client):
     assert response.status_code == 201
 
 
-def test_create_trip_far_future(client):
+@pytest.mark.asyncio
+async def test_create_trip_far_future(client):
     """Test creating trip far in the future (5 years)."""
-    response = client.post("/trips/", json={
+    response = await client.post("/trips/", json={
         "title": "Future Trip",
         "start_date": (date.today() + timedelta(days=1825)).isoformat(),  # ~5 years
         "end_date": (date.today() + timedelta(days=1835)).isoformat()
@@ -214,10 +238,11 @@ def test_create_trip_far_future(client):
 
 # ==================== UPDATE TRIP - ADDITIONAL TESTS ====================
 
-def test_update_trip_only_start_date(client, sample_trip):
+@pytest.mark.asyncio
+async def test_update_trip_only_start_date(client, sample_trip):
     """Test updating only the start date."""
     new_start = (date.today() + timedelta(days=12)).isoformat()
-    response = client.put(f"/trips/{sample_trip.id}", json={
+    response = await client.put(f"/trips/{sample_trip.id}", json={
         "start_date": new_start
     })
     assert response.status_code == 200
@@ -226,10 +251,11 @@ def test_update_trip_only_start_date(client, sample_trip):
     assert data["title"] == "Test Trip"  # Unchanged
 
 
-def test_update_trip_only_end_date(client, sample_trip):
+@pytest.mark.asyncio
+async def test_update_trip_only_end_date(client, sample_trip):
     """Test updating only the end date."""
     new_end = (date.today() + timedelta(days=25)).isoformat()
-    response = client.put(f"/trips/{sample_trip.id}", json={
+    response = await client.put(f"/trips/{sample_trip.id}", json={
         "end_date": new_end
     })
     assert response.status_code == 200
@@ -238,9 +264,10 @@ def test_update_trip_only_end_date(client, sample_trip):
     assert data["title"] == "Test Trip"  # Unchanged
 
 
-def test_update_trip_all_fields(client, sample_trip):
+@pytest.mark.asyncio
+async def test_update_trip_all_fields(client, sample_trip):
     """Test updating all fields at once."""
-    response = client.put(f"/trips/{sample_trip.id}", json={
+    response = await client.put(f"/trips/{sample_trip.id}", json={
         "title": "Completely New Trip",
         "start_date": (date.today() + timedelta(days=15)).isoformat(),
         "end_date": (date.today() + timedelta(days=30)).isoformat()
@@ -251,9 +278,10 @@ def test_update_trip_all_fields(client, sample_trip):
     assert data["id"] == sample_trip.id  # ID unchanged
 
 
-def test_update_trip_empty_body(client, sample_trip):
+@pytest.mark.asyncio
+async def test_update_trip_empty_body(client, sample_trip):
     """Test updating with empty JSON body."""
-    response = client.put(f"/trips/{sample_trip.id}", json={})
+    response = await client.put(f"/trips/{sample_trip.id}", json={})
     assert response.status_code == 200
     data = response.json()
     # Nothing should change
@@ -261,16 +289,18 @@ def test_update_trip_empty_body(client, sample_trip):
     assert data["id"] == sample_trip.id
 
 
-def test_update_trip_invalid_field(client, sample_trip):
+@pytest.mark.asyncio
+async def test_update_trip_invalid_field(client, sample_trip):
     """Test updating with invalid/unknown field."""
-    response = client.put(f"/trips/{sample_trip.id}", json={
+    response = await client.put(f"/trips/{sample_trip.id}", json={
         "invalid_field": "should be ignored"
     })
     # Should either ignore or reject
     assert response.status_code in [200, 422]
 
 
-def test_update_trip_extend_dates(client, sample_trip):
+@pytest.mark.asyncio
+async def test_update_trip_extend_dates(client, sample_trip):
     """Test extending trip duration."""
     # Get original duration
     original_duration = (sample_trip.end_date - sample_trip.start_date).days
@@ -278,7 +308,7 @@ def test_update_trip_extend_dates(client, sample_trip):
     # Extend by adding 30 more days to the current end_date
     new_end = sample_trip.end_date + timedelta(days=30)
 
-    response = client.put(f"/trips/{sample_trip.id}", json={
+    response = await client.put(f"/trips/{sample_trip.id}", json={
         "end_date": new_end.isoformat()
     })
     assert response.status_code == 200
@@ -294,17 +324,19 @@ def test_update_trip_extend_dates(client, sample_trip):
     assert new_duration == original_duration + 30
 
 
-def test_update_trip_shorten_dates(client, sample_trip):
+@pytest.mark.asyncio
+async def test_update_trip_shorten_dates(client, sample_trip):
     """Test shortening trip duration."""
-    response = client.put(f"/trips/{sample_trip.id}", json={
+    response = await client.put(f"/trips/{sample_trip.id}", json={
         "end_date": (date.today() + timedelta(days=15)).isoformat()
     })
     assert response.status_code == 200
 
 
-def test_update_trip_to_empty_title(client, sample_trip):
+@pytest.mark.asyncio
+async def test_update_trip_to_empty_title(client, sample_trip):
     """Test updating trip to have empty title - should fail."""
-    response = client.put(f"/trips/{sample_trip.id}", json={
+    response = await client.put(f"/trips/{sample_trip.id}", json={
         "title": "   "
     })
     assert response.status_code == 422
@@ -313,46 +345,50 @@ def test_update_trip_to_empty_title(client, sample_trip):
 
 # ==================== DELETE TRIP - ADDITIONAL TESTS ====================
 
-def test_delete_trip_twice(client, sample_trip):
+@pytest.mark.asyncio
+async def test_delete_trip_twice(client, sample_trip):
     """Test deleting the same trip twice - second should fail."""
     # First delete
-    response1 = client.delete(f"/trips/{sample_trip.id}")
+    response1 = await client.delete(f"/trips/{sample_trip.id}")
     assert response1.status_code == 200
 
     # Second delete - should fail
-    response2 = client.delete(f"/trips/{sample_trip.id}")
+    response2 = await client.delete(f"/trips/{sample_trip.id}")
     assert response2.status_code == 404
 
 
-def test_delete_trip_with_stops_cascade(client, sample_trip_with_stop):
+@pytest.mark.asyncio
+async def test_delete_trip_with_stops_cascade(client, sample_trip_with_stop):
     """Test that deleting a trip also deletes its stops (CASCADE)."""
     trip, stop = sample_trip_with_stop
 
     # Delete the trip
-    response = client.delete(f"/trips/{trip.id}")
+    response = await client.delete(f"/trips/{trip.id}")
     assert response.status_code == 200
 
     # Verify trip is gone
-    get_trip_response = client.get(f"/trips/{trip.id}")
+    get_trip_response = await client.get(f"/trips/{trip.id}")
     assert get_trip_response.status_code == 404
 
     # Verify stop is also gone (CASCADE delete)
-    get_stop_response = client.get(f"/trips/{trip.id}/stops/{stop.id}")
+    get_stop_response = await client.get(f"/trips/{trip.id}/stops/{stop.id}")
     assert get_stop_response.status_code == 404
 
 
 # ==================== GET ALL TRIPS - ADDITIONAL TESTS ====================
 
-def test_get_all_trips_empty(client):
+@pytest.mark.asyncio
+async def test_get_all_trips_empty(client):
     """Test getting all trips when none exist."""
-    response = client.get("/trips/")
+    response = await client.get("/trips/")
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
     # Might be empty or might have trips from other tests
 
 
-def test_get_all_trips_multiple(client, db_session):
+@pytest.mark.asyncio
+async def test_get_all_trips_multiple(client, db_session):
     """Test getting all trips when multiple exist."""
     from app.models.trip import Trip as TripModel
 
@@ -367,17 +403,18 @@ def test_get_all_trips_multiple(client, db_session):
     ]
     for trip in trips:
         db_session.add(trip)
-    db_session.commit()
+    await db_session.commit()
 
-    response = client.get("/trips/")
+    response = await client.get("/trips/")
     assert response.status_code == 200
     data = response.json()
     assert len(data) >= 3
 
 
-def test_get_all_trips_returns_correct_fields(client, sample_trip):
+@pytest.mark.asyncio
+async def test_get_all_trips_returns_correct_fields(client, sample_trip):
     """Test that GET /trips returns all required fields."""
-    response = client.get("/trips/")
+    response = await client.get("/trips/")
     assert response.status_code == 200
     data = response.json()
 
@@ -391,9 +428,10 @@ def test_get_all_trips_returns_correct_fields(client, sample_trip):
 
 # ==================== EDGE CASES & ERROR HANDLING ====================
 
-def test_create_trip_with_null_title(client):
+@pytest.mark.asyncio
+async def test_create_trip_with_null_title(client):
     """Test creating trip with null title."""
-    response = client.post("/trips/", json={
+    response = await client.post("/trips/", json={
         "title": None,
         "start_date": (date.today() + timedelta(days=10)).isoformat(),
         "end_date": (date.today() + timedelta(days=20)).isoformat()
@@ -401,9 +439,10 @@ def test_create_trip_with_null_title(client):
     assert response.status_code == 422
 
 
-def test_create_trip_with_invalid_date_format(client):
+@pytest.mark.asyncio
+async def test_create_trip_with_invalid_date_format(client):
     """Test creating trip with invalid date format."""
-    response = client.post("/trips/", json={
+    response = await client.post("/trips/", json={
         "title": "Invalid Date Trip",
         "start_date": "not-a-date",
         "end_date": (date.today() + timedelta(days=20)).isoformat()
@@ -411,38 +450,42 @@ def test_create_trip_with_invalid_date_format(client):
     assert response.status_code == 422
 
 
-def test_update_trip_negative_id(client):
+@pytest.mark.asyncio
+async def test_update_trip_negative_id(client):
     """Test updating trip with negative ID."""
-    response = client.put("/trips/-1", json={
+    response = await client.put("/trips/-1", json={
         "title": "Negative ID"
     })
     assert response.status_code == 404
 
 
-def test_delete_trip_negative_id(client):
+@pytest.mark.asyncio
+async def test_delete_trip_negative_id(client):
     """Test deleting trip with negative ID."""
-    response = client.delete("/trips/-1")
+    response = await client.delete("/trips/-1")
     assert response.status_code == 404
 
 
-def test_get_trip_negative_id(client):
+@pytest.mark.asyncio
+async def test_get_trip_negative_id(client):
     """Test getting trip with negative ID."""
-    response = client.get("/trips/-1")
+    response = await client.get("/trips/-1")
     assert response.status_code == 404
 
 
 # ==================== CONCURRENT OPERATIONS ====================
 
-def test_update_same_trip_twice(client, sample_trip):
+@pytest.mark.asyncio
+async def test_update_same_trip_twice(client, sample_trip):
     """Test updating the same trip twice in succession."""
     # First update
-    response1 = client.put(f"/trips/{sample_trip.id}", json={
+    response1 = await client.put(f"/trips/{sample_trip.id}", json={
         "title": "First Update"
     })
     assert response1.status_code == 200
 
     # Second update
-    response2 = client.put(f"/trips/{sample_trip.id}", json={
+    response2 = await client.put(f"/trips/{sample_trip.id}", json={
         "title": "Second Update"
     })
     assert response2.status_code == 200
