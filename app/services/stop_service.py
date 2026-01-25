@@ -292,11 +292,10 @@ class StopService:
             HTTPException: 400/404/422 for various validation failures
         """
         # Verify trip exists using TripService
-        await TripService.get_trip(trip_id, db)
+        trip = await TripService.get_trip(trip_id, db)
 
         # Get the stop
         stop = await StopService.get_stop(trip_id, stop_id, db)
-        trip = stop.trip
 
         # Get update data (only provided fields)
         update_data = stop_update.model_dump(exclude_unset=True)
