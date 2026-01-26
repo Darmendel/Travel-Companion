@@ -9,6 +9,7 @@ from alembic import context
 from app.db.session import Base, DATABASE_URL
 from app.models.trip import Trip
 from app.models.stop import Stop
+from app.models.user import User  # ← הוסף!
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
