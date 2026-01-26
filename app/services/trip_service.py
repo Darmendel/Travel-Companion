@@ -6,6 +6,7 @@ This service handles all trip-related operations including:
 - CRUD operations (Create, Read, Update, Delete)
 - Validation of trip data
 - Date range validations
+- User ownership verification
 """
 
 from fastapi import HTTPException
@@ -22,10 +23,26 @@ class TripService:
     """Async service layer for Trip business logic."""
 
     @staticmethod
-    async def get_trip(trip_id: int, db: AsyncSession) -> TripModel:
-        """Get trip by ID or raise 404 if not found."""
+    async def get_trip(trip_id: int, db: AsyncSession, user_id: int) -> TripModel:
+        """
+        Get trip by ID, ensuring it belongs to the user.
+
+        Args:
+            trip_id: ID of the trip
+            db: Database session
+            user_id: ID of the current user
+
+        Returns:
+            TripModel if found and belongs to user
+
+        Raises:
+            HTTPException: 404 if trip not found or doesn't belong to user
+        """
         result = await db.execute(
-            select(TripModel).filter(TripModel.id == trip_id)
+            select(TripModel).filter(
+                TripModel.id == trip_id,
+                TripModel.user_id == user_id
+            )
         )
         trip = result.scalar_one_or_none()
 
@@ -37,28 +54,31 @@ class TripService:
         return trip
 
     @staticmethod
-    async def get_all_trips(db: AsyncSession) -> List[TripModel]:
+    async def get_all_trips(db: AsyncSession, user_id: int) -> List[TripModel]:
         """
-        Get all trips from the database.
+        Get all trips for a specific user.
 
-        Equivalent to: SELECT * FROM trips;
+        Equivalent to: SELECT * FROM trips WHERE user_id = ?;
 
         Args:
             db: Async database session
+            user_id: ID of the current user
 
         Returns:
-            List[TripModel]: List of all trips
+            List[TripModel]: List of all trips belonging to the user
         """
-        result = await db.execute(select(TripModel))
+        result = await db.execute(
+            select(TripModel).filter(TripModel.user_id == user_id)
+        )
         trips = result.scalars().all()
         return list(trips)
 
     @staticmethod
-    async def create_trip(trip_data: TripCreate, db: AsyncSession) -> TripModel:
+    async def create_trip(trip_data: TripCreate, db: AsyncSession, user_id: int) -> TripModel:
         """
-        Create a new trip.
+        Create a new trip for a user.
 
-        Equivalent to: INSERT INTO trips (...) VALUES (...);
+        Equivalent to: INSERT INTO trips (..., user_id) VALUES (..., ?);
 
         The validation is already done by Pydantic in TripCreate schema:
         - title is not empty
@@ -68,14 +88,14 @@ class TripService:
         Args:
             trip_data: Validated trip data from Pydantic
             db: Async database session
+            user_id: ID of the current user (from JWT token)
 
         Returns:
             TripModel: The newly created trip with generated ID
         """
         # Convert Pydantic model to SQLAlchemy model
-        # trip_data.model_dump() returns a dict: {"title": ..., "start_date": ..., ...}
-        # **trip_data.model_dump() unpacks that dict as keyword arguments
-        new_trip = TripModel(**trip_data.model_dump())
+        # Add user_id to associate trip with current user
+        new_trip = TripModel(**trip_data.model_dump(), user_id=user_id)
 
         db.add(new_trip)
         await db.commit()
@@ -87,29 +107,33 @@ class TripService:
     async def update_trip(
             trip_id: int,
             trip_update: TripUpdate,
-            db: AsyncSession
+            db: AsyncSession,
+            user_id: int
     ) -> TripModel:
         """
-        Update an existing trip.
+        Update an existing trip, ensuring it belongs to the user.
 
-        Equivalent to: UPDATE trips SET ... WHERE id = ...;
+        Equivalent to: UPDATE trips SET ... WHERE id = ? AND user_id = ?;
 
         Validates:
-        - Trip exists
+        - Trip exists and belongs to user
         - If dates are updated, end_date must be after start_date
 
         Args:
             trip_id: ID of the trip to update
             trip_update: Partial update data (only provided fields)
             db: Async database session
+            user_id: ID of the current user
 
         Returns:
             TripModel: The updated trip
 
         Raises:
-            HTTPException: 404 if trip not found, 400 if dates invalid
+            HTTPException: 404 if trip not found or doesn't belong to user
+                          400 if dates invalid
         """
-        trip = await TripService.get_trip(trip_id, db)
+        # Verify trip exists and belongs to user
+        trip = await TripService.get_trip(trip_id, db, user_id)
 
         # Get only the fields that were provided in the request
         # exclude_unset=True means: only include fields the user sent
@@ -131,11 +155,11 @@ class TripService:
         return trip
 
     @staticmethod
-    async def delete_trip(trip_id: int, db: AsyncSession) -> TripModel:
+    async def delete_trip(trip_id: int, db: AsyncSession, user_id: int) -> TripModel:
         """
-        Delete a trip by ID.
+        Delete a trip by ID, ensuring it belongs to the user.
 
-        Equivalent to: DELETE FROM trips WHERE id = ...;
+        Equivalent to: DELETE FROM trips WHERE id = ? AND user_id = ?;
 
         Note: This will also delete all stops in the trip due to
         CASCADE delete configured in the Trip model.
@@ -143,14 +167,16 @@ class TripService:
         Args:
             trip_id: ID of the trip to delete
             db: Async database session
+            user_id: ID of the current user
 
         Returns:
             TripModel: The deleted trip (before deletion)
 
         Raises:
-            HTTPException: 404 if trip not found
+            HTTPException: 404 if trip not found or doesn't belong to user
         """
-        trip = await TripService.get_trip(trip_id, db)
+        # Verify trip exists and belongs to user
+        trip = await TripService.get_trip(trip_id, db, user_id)
 
         await db.delete(trip)
         await db.commit()

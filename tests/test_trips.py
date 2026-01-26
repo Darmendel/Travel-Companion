@@ -248,7 +248,8 @@ async def test_update_trip_only_start_date(client, sample_trip):
     assert response.status_code == 200
     data = response.json()
     assert data["start_date"] == new_start
-    assert data["title"] == "Test Trip"  # Unchanged
+    # end_date should remain unchanged
+    assert data["end_date"] == sample_trip.end_date.isoformat()
 
 
 @pytest.mark.asyncio
@@ -261,7 +262,8 @@ async def test_update_trip_only_end_date(client, sample_trip):
     assert response.status_code == 200
     data = response.json()
     assert data["end_date"] == new_end
-    assert data["title"] == "Test Trip"  # Unchanged
+    # start_date should remain unchanged
+    assert data["start_date"] == sample_trip.start_date.isoformat()
 
 
 @pytest.mark.asyncio
@@ -388,27 +390,33 @@ async def test_get_all_trips_empty(client):
 
 
 @pytest.mark.asyncio
-async def test_get_all_trips_multiple(client, db_session):
-    """Test getting all trips when multiple exist."""
-    from app.models.trip import Trip as TripModel
+async def test_get_all_trips_multiple(client):
+    """
+    Test getting all trips when multiple exist.
 
-    # Create multiple trips
-    trips = [
-        TripModel(
-            title=f"Trip {i}",
-            start_date=date.today() + timedelta(days=10 + i * 10),
-            end_date=date.today() + timedelta(days=15 + i * 10)
-        )
-        for i in range(3)
-    ]
-    for trip in trips:
-        db_session.add(trip)
-    await db_session.commit()
+    Uses API to create trips (automatic user_id via authentication)
+    instead of direct DB access which required manual user_id.
+    """
+    # Create trips via API (automatically has user_id from mock auth!)
+    for i in range(3):
+        response = await client.post("/trips/", json={
+            "title": f"Trip {i}",
+            "start_date": (date.today() + timedelta(days=10 + i * 10)).isoformat(),
+            "end_date": (date.today() + timedelta(days=15 + i * 10)).isoformat()
+        })
+        assert response.status_code == 201
 
+    # Now test getting all trips
     response = await client.get("/trips/")
     assert response.status_code == 200
     data = response.json()
     assert len(data) >= 3
+
+    # Verify the trips we created are in the response
+    titles = [trip["title"] for trip in data]
+    assert "Trip 0" in titles
+    assert "Trip 1" in titles
+    assert "Trip 2" in titles
 
 
 @pytest.mark.asyncio
