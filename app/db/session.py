@@ -3,11 +3,16 @@ from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 
+# Load environment variables
+load_dotenv()
+
 # Read DATABASE_URL from the environment variables.
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://dar:cabbage27@localhost:5432/travel_app",  # if DATABASE_URL doesn't exist - uses this
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError(
+        "DATABASE_URL environment variable is not set!\n"
+        "Please set it in your .env file."
+    )
 
 # Create the async SQLAlchemy engine (handles DB connections)
 engine = create_async_engine(DATABASE_URL, echo=False)

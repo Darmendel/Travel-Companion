@@ -5,15 +5,27 @@ JWT Token Creation and Verification
 Handles password hashing and JWT token management.
 """
 
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from dotenv import load_dotenv
 
-# TODO: Move these to environment variables!
-SECRET_KEY = "your-secret-key-change-this-in-production-make-it-long-and-random"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30 * 24  # 30 days
+# Load environment variables
+load_dotenv()
+
+# JWT Configuration from environment variables
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError(
+        "SECRET_KEY environment variable is not set! "
+        "Please set it in your .env file. "
+        "Generate one with: openssl rand -hex 32"
+    )
+
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "43200"))
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
