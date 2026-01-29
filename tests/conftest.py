@@ -77,10 +77,10 @@ async def test_user(async_engine, setup_database):
             session.add(user)
             await session.commit()
             await session.refresh(user)
-            print(f"\n✅ Created test user: {user.email} (ID: {user.id})")
+            print(f"\nCreated test user: {user.email} (ID: {user.id})")
             return user
         else:
-            print(f"\n✅ Test user already exists: {existing_user.email} (ID: {existing_user.id})")
+            print(f"\nTest user already exists: {existing_user.email} (ID: {existing_user.id})")
             return existing_user
 
 
@@ -194,6 +194,48 @@ async def sample_trip_with_stop(db_session):
     return trip, stop
 
 
+@pytest_asyncio.fixture
+async def sample_trip_with_multiple_stops(db_session):
+    """Simple fixture with 3 stops - uses global TEST_USER_ID"""
+    trip = TripModel(
+        title="Trip with Multiple Stops",
+        start_date=date.today() + timedelta(days=10),
+        end_date=date.today() + timedelta(days=30),
+        user_id=TEST_USER_ID
+    )
+    db_session.add(trip)
+    await db_session.commit()
+    await db_session.refresh(trip)
+
+    stops = []
+    stop_data = [
+        ("Tokyo", "Japan", 11, 15, 0, 35.6762, 139.6503),
+        ("Kyoto", "Japan", 16, 20, 1, 35.0116, 135.7681),
+        ("Osaka", "Japan", 21, 25, 2, 34.6937, 135.5023),
+    ]
+
+    for name, country, start_offset, end_offset, order_idx, lat, lon in stop_data:
+        stop = StopModel(
+            trip_id=trip.id,
+            name=name,
+            country=country,
+            start_date=date.today() + timedelta(days=start_offset),
+            end_date=date.today() + timedelta(days=end_offset),
+            order_index=order_idx,
+            latitude=lat,
+            longitude=lon,
+        )
+        db_session.add(stop)
+        stops.append(stop)
+
+    await db_session.commit()
+
+    for stop in stops:
+        await db_session.refresh(stop)
+
+    return trip, stops
+
+
 # ============================================================
 # ADVANCED FIXTURES - when we need user object
 # ============================================================
@@ -207,7 +249,7 @@ async def trip_for_user(db_session, test_user):
 
     Example:
         async def test_user_can_only_see_own_trips(
-            client, 
+            client,
             trip_for_user,  # ← belongs to test_user
             test_user
         ):

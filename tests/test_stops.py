@@ -2,6 +2,7 @@
 import time
 from datetime import date, timedelta
 import pytest
+from tests.conftest import TEST_USER_ID
 
 
 # ==================== CREATE STOP TESTS ====================
@@ -1230,7 +1231,8 @@ async def test_create_100_stops_performance(client, db_session):
     trip = TripModel(
         title="Long Trip",
         start_date=date.today() + timedelta(days=10),
-        end_date=date.today() + timedelta(days=500)
+        end_date=date.today() + timedelta(days=500),
+        user_id=TEST_USER_ID
     )
     db_session.add(trip)
     await db_session.commit()
@@ -1305,7 +1307,8 @@ async def test_get_all_stops_performance_with_many_stops(client, db_session):
     trip = TripModel(
         title="Performance Trip",
         start_date=date.today() + timedelta(days=10),
-        end_date=date.today() + timedelta(days=500)
+        end_date=date.today() + timedelta(days=500),
+        user_id=TEST_USER_ID
     )
     db_session.add(trip)
     await db_session.commit()
