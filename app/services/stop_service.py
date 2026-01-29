@@ -37,8 +37,26 @@ class StopService:
     """Async service layer for Stop business logic."""
 
     @staticmethod
-    async def get_stop(trip_id: int, stop_id: int, db: AsyncSession) -> StopModel:
-        """Get stop or raise 404."""
+    async def get_stop(
+            trip_id: int,
+            stop_id: int,
+            db: AsyncSession,
+            user_id: int = None
+    ) -> StopModel:
+        """Get stop or raise 404.
+
+        Args:
+            trip_id: ID of the trip
+            stop_id: ID of the stop
+            db: Async database session
+            user_id: ID of the authenticated user (optional, for future ownership checks)
+
+        Returns:
+            StopModel: The stop
+
+        Raises:
+            HTTPException: 404 if stop not found
+        """
         result = await db.execute(
             select(StopModel).filter(
                 StopModel.id == stop_id,
@@ -177,7 +195,8 @@ class StopService:
     async def create_stop(
             trip_id: int,
             stop_data: StopCreate,
-            db: AsyncSession
+            db: AsyncSession,
+            user_id: int
     ) -> StopModel:
         """
         Create a new stop with full validation.
@@ -193,6 +212,7 @@ class StopService:
             trip_id: ID of the trip
             stop_data: Validated stop data from Pydantic
             db: Async database session
+            user_id: ID of the authenticated user
 
         Returns:
             StopModel: The newly created stop
@@ -201,7 +221,7 @@ class StopService:
             HTTPException: 400/404/422 for various validation failures
         """
         # Verify trip exists using TripService
-        trip = await TripService.get_trip(trip_id, db)
+        trip = await TripService.get_trip(trip_id, db, user_id)
 
         # Validate dates within trip
         StopService.validate_dates_within_trip(
@@ -233,7 +253,11 @@ class StopService:
         return new_stop
 
     @staticmethod
-    async def get_all_stops(trip_id: int, db: AsyncSession) -> List[StopModel]:
+    async def get_all_stops(
+            trip_id: int,
+            db: AsyncSession,
+            user_id: int
+    ) -> List[StopModel]:
         """
         Get all stops for a trip, ordered by order_index.
 
@@ -243,6 +267,7 @@ class StopService:
         Args:
             trip_id: ID of the trip
             db: Async database session
+            user_id: ID of the authenticated user
 
         Returns:
             List[StopModel]: List of stops ordered by order_index
@@ -251,7 +276,7 @@ class StopService:
             HTTPException: 404 if trip not found
         """
         # Verify trip exists using TripService
-        await TripService.get_trip(trip_id, db)
+        await TripService.get_trip(trip_id, db, user_id)
 
         result = await db.execute(
             select(StopModel)
@@ -267,7 +292,8 @@ class StopService:
             trip_id: int,
             stop_id: int,
             stop_update: StopUpdate,
-            db: AsyncSession
+            db: AsyncSession,
+            user_id: int
     ) -> StopModel:
         """
         Update a stop with full validation.
@@ -284,6 +310,7 @@ class StopService:
             stop_id: ID of the stop
             stop_update: Partial update data
             db: Async database session
+            user_id: ID of the authenticated user
 
         Returns:
             StopModel: The updated stop
@@ -292,7 +319,7 @@ class StopService:
             HTTPException: 400/404/422 for various validation failures
         """
         # Verify trip exists using TripService
-        trip = await TripService.get_trip(trip_id, db)
+        trip = await TripService.get_trip(trip_id, db, user_id)
 
         # Get the stop
         stop = await StopService.get_stop(trip_id, stop_id, db)
@@ -350,7 +377,12 @@ class StopService:
         return stop
 
     @staticmethod
-    async def delete_stop(trip_id: int, stop_id: int, db: AsyncSession) -> StopModel:
+    async def delete_stop(
+            trip_id: int,
+            stop_id: int,
+            db: AsyncSession,
+            user_id: int = None
+    ) -> StopModel:
         """
         Delete a stop from a trip.
 
@@ -358,6 +390,7 @@ class StopService:
             trip_id: ID of the trip
             stop_id: ID of the stop
             db: Async database session
+            user_id: ID of the authenticated user (optional, for future ownership checks)
 
         Returns:
             StopModel: The deleted stop (before deletion)
@@ -365,7 +398,7 @@ class StopService:
         Raises:
             HTTPException: 404 if stop not found
         """
-        stop = await StopService.get_stop(trip_id, stop_id, db)
+        stop = await StopService.get_stop(trip_id, stop_id, db, user_id)
         await db.delete(stop)
         await db.commit()
         return stop
@@ -374,7 +407,8 @@ class StopService:
     async def reorder_stops(
             trip_id: int,
             stop_ids: List[int],
-            db: AsyncSession
+            db: AsyncSession,
+            user_id: int
     ) -> List[StopModel]:
         """
         Reorder stops in a trip.
@@ -390,6 +424,7 @@ class StopService:
             trip_id: ID of the trip
             stop_ids: List of stop IDs in desired order
             db: Async database session
+            user_id: ID of the authenticated user
 
         Returns:
             List[StopModel]: Updated stops in new order
@@ -398,7 +433,7 @@ class StopService:
             HTTPException: 400/404 for validation failures
         """
         # Verify trip exists using TripService
-        await TripService.get_trip(trip_id, db)
+        await TripService.get_trip(trip_id, db, user_id)
 
         # Get all stops for this trip
         result = await db.execute(
