@@ -3,16 +3,17 @@
 User Service Layer
 
 Handles user authentication, registration, and management.
+Uses UserRepository for all database access.
 """
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from typing import Optional
 
 from app.models.user import User as UserModel
 from app.schemas.user import UserCreate, UserUpdate
 from app.auth.jwt import get_password_hash, verify_password, create_access_token
+from app.repositories.user_repository import UserRepository
 
 
 class UserService:
@@ -37,13 +38,10 @@ class UserService:
         Raises:
             HTTPException: 400 if email already exists
         """
-        # Check if email already exists
-        result = await db.execute(
-            select(UserModel).filter(UserModel.email == user_data.email)
-        )
-        existing_user = result.scalar_one_or_none()
+        repo = UserRepository(db)
 
-        if existing_user:
+        # Check if email already exists
+        if await repo.email_exists(user_data.email):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
@@ -52,18 +50,12 @@ class UserService:
         # Hash password
         hashed_password = get_password_hash(user_data.password)
 
-        # Create user
-        new_user = UserModel(
+        # Create user using repository
+        return await repo.create_user(
             email=user_data.email,
             hashed_password=hashed_password,
             full_name=user_data.full_name
         )
-
-        db.add(new_user)
-        await db.commit()
-        await db.refresh(new_user)
-
-        return new_user
 
     @staticmethod
     async def authenticate_user(
@@ -82,11 +74,10 @@ class UserService:
         Returns:
             User model if credentials are valid, None otherwise
         """
+        repo = UserRepository(db)
+
         # Find user by email
-        result = await db.execute(
-            select(UserModel).filter(UserModel.email == email)
-        )
-        user = result.scalar_one_or_none()
+        user = await repo.get_by_email(email)
 
         if not user:
             return None
@@ -112,10 +103,8 @@ class UserService:
         Raises:
             HTTPException: 404 if user not found
         """
-        result = await db.execute(
-            select(UserModel).filter(UserModel.id == user_id)
-        )
-        user = result.scalar_one_or_none()
+        repo = UserRepository(db)
+        user = await repo.get_by_id(user_id)
 
         if not user:
             raise HTTPException(
@@ -137,10 +126,8 @@ class UserService:
         Returns:
             User model if found, None otherwise
         """
-        result = await db.execute(
-            select(UserModel).filter(UserModel.email == email)
-        )
-        return result.scalar_one_or_none()
+        repo = UserRepository(db)
+        return await repo.get_by_email(email)
 
     @staticmethod
     async def update_user(
@@ -162,14 +149,16 @@ class UserService:
         Raises:
             HTTPException: 404 if user not found, 400 if email already taken
         """
+        repo = UserRepository(db)
+
+        # Check user exists
         user = await UserService.get_user_by_id(user_id, db)
 
         update_data = user_update.model_dump(exclude_unset=True)
 
         # Check if email is being updated and is already taken
         if "email" in update_data:
-            existing_user = await UserService.get_user_by_email(update_data["email"], db)
-            if existing_user and existing_user.id != user_id:
+            if await repo.email_exists(update_data["email"], exclude_user_id=user_id):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Email already taken"
@@ -179,14 +168,16 @@ class UserService:
         if "password" in update_data:
             update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
 
-        # Apply updates
-        for key, value in update_data.items():
-            setattr(user, key, value)
+        # Update using repository
+        updated_user = await repo.update_user(user_id, **update_data)
 
-        await db.commit()
-        await db.refresh(user)
+        if not updated_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User with ID {user_id} not found"
+            )
 
-        return user
+        return updated_user
 
     @staticmethod
     def create_user_token(user: UserModel) -> str:
