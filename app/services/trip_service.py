@@ -7,16 +7,18 @@ This service handles all trip-related operations including:
 - Validation of trip data
 - Date range validations
 - User ownership verification
+
+Uses TripRepository for all database access.
 """
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from typing import List
 from datetime import date
 
 from app.models.trip import Trip as TripModel
 from app.schemas.trip import TripCreate, TripUpdate
+from app.repositories.trip_repository import TripRepository
 
 
 class TripService:
@@ -38,13 +40,8 @@ class TripService:
         Raises:
             HTTPException: 404 if trip not found or doesn't belong to user
         """
-        result = await db.execute(
-            select(TripModel).filter(
-                TripModel.id == trip_id,
-                TripModel.user_id == user_id
-            )
-        )
-        trip = result.scalar_one_or_none()
+        repo = TripRepository(db)
+        trip = await repo.get_by_id_and_user(trip_id, user_id)
 
         if not trip:
             raise HTTPException(
@@ -67,11 +64,8 @@ class TripService:
         Returns:
             List[TripModel]: List of all trips belonging to the user
         """
-        result = await db.execute(
-            select(TripModel).filter(TripModel.user_id == user_id)
-        )
-        trips = result.scalars().all()
-        return list(trips)
+        repo = TripRepository(db)
+        return await repo.get_by_user_id(user_id)
 
     @staticmethod
     async def create_trip(trip_data: TripCreate, db: AsyncSession, user_id: int) -> TripModel:
@@ -93,15 +87,13 @@ class TripService:
         Returns:
             TripModel: The newly created trip with generated ID
         """
-        # Convert Pydantic model to SQLAlchemy model
-        # Add user_id to associate trip with current user
-        new_trip = TripModel(**trip_data.model_dump(), user_id=user_id)
-
-        db.add(new_trip)
-        await db.commit()
-        await db.refresh(new_trip)  # Get the newly generated ID and updated state
-
-        return new_trip
+        repo = TripRepository(db)
+        return await repo.create_for_user(
+            user_id=user_id,
+            title=trip_data.title,
+            start_date=trip_data.start_date,
+            end_date=trip_data.end_date
+        )
 
     @staticmethod
     async def update_trip(
@@ -136,7 +128,6 @@ class TripService:
         trip = await TripService.get_trip(trip_id, db, user_id)
 
         # Get only the fields that were provided in the request
-        # exclude_unset=True means: only include fields the user sent
         update_data = trip_update.model_dump(exclude_unset=True)
 
         # Validate dates if they're being updated
@@ -145,14 +136,17 @@ class TripService:
 
         TripService.validate_trip_date_range(new_start, new_end)
 
-        # Apply the updates
-        for key, value in update_data.items():
-            setattr(trip, key, value)
+        # Update using repository
+        repo = TripRepository(db)
+        updated_trip = await repo.update_trip(trip_id, **update_data)
 
-        await db.commit()
-        await db.refresh(trip)
+        if not updated_trip:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Trip with ID {trip_id} not found"
+            )
 
-        return trip
+        return updated_trip
 
     @staticmethod
     async def delete_trip(trip_id: int, db: AsyncSession, user_id: int) -> TripModel:
@@ -178,8 +172,9 @@ class TripService:
         # Verify trip exists and belongs to user
         trip = await TripService.get_trip(trip_id, db, user_id)
 
-        await db.delete(trip)
-        await db.commit()
+        # Delete using repository
+        repo = TripRepository(db)
+        await repo.delete_by_id(trip_id)
 
         return trip
 

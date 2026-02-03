@@ -5,20 +5,14 @@ Async Service layer for Stop business logic.
 This service handles all stop-related operations including:
 - CRUD operations for stops
 - Validation orchestration (calls pure validators)
-- Database access
 - Date overlap checking
 - Reordering stops within a trip
 
-The service layer is responsible for:
-1. Database access
-2. Orchestrating validations (calling validators)
-3. Converting ValueError to HTTPException
-4. Business logic that requires DB state
+Uses StopRepository for all database access.
 """
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from typing import List, Optional
 from datetime import date
 
@@ -31,6 +25,7 @@ from app.validators.stop_validators import (
     validate_dates_within_range
 )
 from app.services.trip_service import TripService
+from app.repositories.stop_repository import StopRepository
 
 
 class StopService:
@@ -43,7 +38,8 @@ class StopService:
             db: AsyncSession,
             user_id: int = None
     ) -> StopModel:
-        """Get stop or raise 404.
+        """
+        Get stop or raise 404.
 
         Args:
             trip_id: ID of the trip
@@ -57,13 +53,8 @@ class StopService:
         Raises:
             HTTPException: 404 if stop not found
         """
-        result = await db.execute(
-            select(StopModel).filter(
-                StopModel.id == stop_id,
-                StopModel.trip_id == trip_id
-            )
-        )
-        stop = result.scalar_one_or_none()
+        repo = StopRepository(db)
+        stop = await repo.get_by_id_and_trip(stop_id, trip_id)
 
         if not stop:
             raise HTTPException(
@@ -118,19 +109,14 @@ class StopService:
         Raises:
             HTTPException: 400 if overlap > 1 day
         """
-        # Fetch existing stops from database
-        query = select(StopModel).filter(StopModel.trip_id == trip_id)
-        if exclude_stop_id:
-            query = query.filter(StopModel.id != exclude_stop_id)
-
-        result = await db.execute(query)
-        existing_stops = result.scalars().all()
-
-        # Transform to simple data structure (tuples)
-        existing_dates = [
-            (stop.start_date, stop.end_date, stop.name)
-            for stop in existing_stops
-        ]
+        # Use repository to get existing stops as simple tuples
+        repo = StopRepository(db)
+        existing_dates = await repo.get_stops_with_date_overlap(
+            trip_id=trip_id,
+            start_date=start_date,
+            end_date=end_date,
+            exclude_stop_id=exclude_stop_id
+        )
 
         # Call pure validator
         try:
@@ -158,17 +144,10 @@ class StopService:
         Raises:
             HTTPException: 400 if order_index already exists
         """
-        query = select(StopModel).filter(
-            StopModel.trip_id == trip_id,
-            StopModel.order_index == order_index
-        )
-        if exclude_stop_id:
-            query = query.filter(StopModel.id != exclude_stop_id)
+        repo = StopRepository(db)
+        exists = await repo.order_index_exists(trip_id, order_index, exclude_stop_id)
 
-        result = await db.execute(query)
-        existing_stop = result.scalar_one_or_none()
-
-        if existing_stop:
+        if exists:
             raise HTTPException(
                 status_code=400,
                 detail=f"Stop with order_index {order_index} already exists in this trip"
@@ -245,12 +224,19 @@ class StopService:
             db
         )
 
-        # Create the stop
-        new_stop = StopModel(**stop_data.model_dump(), trip_id=trip_id)
-        db.add(new_stop)
-        await db.commit()
-        await db.refresh(new_stop)
-        return new_stop
+        # Create the stop using repository
+        repo = StopRepository(db)
+        return await repo.create_stop(
+            trip_id=trip_id,
+            name=stop_data.name,
+            start_date=stop_data.start_date,
+            end_date=stop_data.end_date,
+            order_index=stop_data.order_index,
+            country=stop_data.country,
+            latitude=stop_data.latitude,
+            longitude=stop_data.longitude,
+            notes=stop_data.notes
+        )
 
     @staticmethod
     async def get_all_stops(
@@ -278,14 +264,9 @@ class StopService:
         # Verify trip exists using TripService
         await TripService.get_trip(trip_id, db, user_id)
 
-        result = await db.execute(
-            select(StopModel)
-            .filter(StopModel.trip_id == trip_id)
-            .order_by(StopModel.order_index)
-        )
-        stops = result.scalars().all()
-
-        return list(stops)
+        # Get stops using repository
+        repo = StopRepository(db)
+        return await repo.get_by_trip_id(trip_id, order_by_index=True)
 
     @staticmethod
     async def update_stop(
@@ -357,10 +338,6 @@ class StopService:
             )
 
         # Validate coordinates with country
-        # This handles both cases:
-        # 1. Updating country but keeping existing coordinates
-        # 2. Updating coordinates but keeping existing country
-        # 3. Updating both
         if "country" in update_data or "latitude" in update_data or "longitude" in update_data:
             StopService.validate_coordinates_with_country(
                 final_lat,
@@ -368,13 +345,17 @@ class StopService:
                 final_country
             )
 
-        # Apply updates
-        for key, value in update_data.items():
-            setattr(stop, key, value)
+        # Update using repository
+        repo = StopRepository(db)
+        updated_stop = await repo.update_stop(stop_id, **update_data)
 
-        await db.commit()
-        await db.refresh(stop)
-        return stop
+        if not updated_stop:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Stop with ID {stop_id} not found"
+            )
+
+        return updated_stop
 
     @staticmethod
     async def delete_stop(
@@ -399,8 +380,10 @@ class StopService:
             HTTPException: 404 if stop not found
         """
         stop = await StopService.get_stop(trip_id, stop_id, db, user_id)
-        await db.delete(stop)
-        await db.commit()
+
+        repo = StopRepository(db)
+        await repo.delete_by_id(stop_id)
+
         return stop
 
     @staticmethod
@@ -435,11 +418,9 @@ class StopService:
         # Verify trip exists using TripService
         await TripService.get_trip(trip_id, db, user_id)
 
-        # Get all stops for this trip
-        result = await db.execute(
-            select(StopModel).filter(StopModel.trip_id == trip_id)
-        )
-        stops = result.scalars().all()
+        # Get all stops for this trip using repository
+        repo = StopRepository(db)
+        stops = await repo.get_by_trip_id(trip_id, order_by_index=False)
         stop_ids_in_db = {stop.id for stop in stops}
 
         # Validate that all provided stop IDs exist in this trip
@@ -461,22 +442,14 @@ class StopService:
         stop_map = {stop.id: stop for stop in stops}
 
         # Phase 1: Set temporary negative indices to avoid constraint violations
-        for temp_index, stop_id in enumerate(stop_ids):
-            stop_map[stop_id].order_index = -(temp_index + 1)
-        await db.flush()
+        temp_mapping = {stop_id: -(i + 1) for i, stop_id in enumerate(stop_ids)}
+        await repo.bulk_update_order_indices(temp_mapping)
 
         # Phase 2: Set final positive indices
-        for new_index, stop_id in enumerate(stop_ids):
-            stop_map[stop_id].order_index = new_index
+        final_mapping = {stop_id: i for i, stop_id in enumerate(stop_ids)}
+        await repo.bulk_update_order_indices(final_mapping)
 
         await db.commit()
 
         # Return updated stops in new order
-        result = await db.execute(
-            select(StopModel)
-            .filter(StopModel.trip_id == trip_id)
-            .order_by(StopModel.order_index)
-        )
-        updated_stops = result.scalars().all()
-
-        return list(updated_stops)
+        return await repo.get_by_trip_id(trip_id, order_by_index=True)
