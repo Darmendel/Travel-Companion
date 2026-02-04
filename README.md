@@ -597,7 +597,7 @@ async def test_stop_overlap_validation(db_session, sample_trip):
     assert exc.value.status_code == 400
 ```
 
-**User isolation test:** 
+**User isolation test:**
 ```python
 async def test_user_cannot_access_other_users_trips(
     client, 
